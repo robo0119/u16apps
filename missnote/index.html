@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ミス診断ノート Web</title>
+  <link rel="icon" href="../icons/missnote.png">
+  <link rel="apple-touch-icon" href="../icons/missnote.png">
+  <link rel="stylesheet" href="../common/style.css">
+  <style>
+    :root { --accent: #f2683f; }
+    .toggles { display: flex; gap: 8px; flex-wrap: wrap; }
+    .toggle { background: transparent; border: 2px solid var(--c); color: var(--c); min-height: 40px; }
+    .toggle.on { background: var(--c); color: #fff; }
+    .top-mistake { font-size: 1.6rem; font-weight: 800; }
+    .problem { padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .problem .memo { color: var(--muted); font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <img src="../icons/missnote.png" alt="">
+    <h1>ミス診断ノート <small style="opacity:.8">Web</small></h1>
+    <a href="../">ほかのアプリ</a>
+  </header>
+  <main>
+    <section id="report" class="hidden"></section>
+
+    <section id="app">
+      <div class="app-banner no-print">
+        <img src="../icons/missnote.png" alt="">
+        <div><b>写真はアプリで、メモはパソコンで</b><br>
+          <span class="muted">Webでは写真なしで手早く記録できます。QRコードでアプリに送ると、あとから写真を足せます。</span></div>
+      </div>
+
+      <div class="card">
+        <h2>間違えた問題を書く</h2>
+        <label>教科</label><div class="toggles" id="subject"></div>
+        <div class="grid" style="gap:0 12px">
+          <div><label>単元</label><input id="unit" placeholder="例:二次関数"></div>
+          <div><label>日にち</label><input id="date" type="date"></div>
+        </div>
+        <label>ミスの種類(いくつでも)</label><div class="toggles" id="mistakes"></div>
+        <label>メモ</label><input id="memo" placeholder="どうして間違えた?次はどうする?">
+        <div class="row" style="margin-top:12px"><button id="add">記録する</button><span class="muted" id="add-note"></span></div>
+      </div>
+
+      <div id="analysis"></div>
+
+      <div class="card no-print">
+        <h2>アプリに送る</h2>
+        <p class="muted" id="send-summary"></p>
+        <div id="send"></div>
+        <div class="row" style="margin-top:10px"><button class="secondary hidden" id="mark-sent">送り終わった</button></div>
+      </div>
+      <p class="muted no-print">記録はこのブラウザの中だけに保存されます。</p>
+    </section>
+  </main>
+  <footer>U16 Apps ・ ミス診断ノート</footer>
+
+  <script src="../common/qr.js"></script>
+  <script src="../common/bridge.js"></script>
+  <script src="../common/charts.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

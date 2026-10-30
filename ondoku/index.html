@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>教科書音読チェッカー Web</title>
+  <link rel="icon" href="../icons/ondokuchecker.png">
+  <link rel="apple-touch-icon" href="../icons/ondokuchecker.png">
+  <link rel="stylesheet" href="../common/style.css">
+  <style>
+    :root { --accent: #142a5c; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --accent: #6d8fd8; } }
+    #passage { font-family: Georgia, "Times New Roman", serif; font-size: 1.2rem; min-height: 180px; }
+    .words { font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; line-height: 2; }
+    .w-ok { color: var(--good); }
+    .w-miss { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); border-radius: 6px; padding: 0 3px; cursor: pointer; text-decoration: underline dotted; }
+    .miss-chip { display: inline-flex; gap: 6px; align-items: center; margin: 4px; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); font-weight: 700; cursor: pointer; border: none; min-height: 36px; }
+    .mic-big { width: 84px; height: 84px; border-radius: 50%; font-size: 2rem; }
+    .mic-big.on { background: var(--bad); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <img src="../icons/ondokuchecker.png" alt="">
+    <h1>音読チェッカー <small style="opacity:.8">Web</small></h1>
+    <a href="../">ほかのアプリ</a>
+  </header>
+  <main>
+    <section id="report" class="hidden"></section>
+
+    <section id="app">
+      <div class="app-banner no-print">
+        <img src="../icons/ondokuchecker.png" alt="">
+        <div><b>長い英文は、パソコンで貼り付けてアプリへ</b><br>
+          <span class="muted">教科書の英文をここに貼り付けると、QRコードでiPhoneのアプリの「読む英文」に送れます。</span></div>
+      </div>
+
+      <div class="card">
+        <h2>読む英文</h2>
+        <textarea id="passage" spellcheck="false" placeholder="ここに英文を貼り付けます"></textarea>
+        <p class="muted" id="count"></p>
+      </div>
+
+      <div class="card no-print">
+        <h2>アプリに送って音読する</h2>
+        <div id="send"></div>
+      </div>
+
+      <div class="card">
+        <h2>Webでも音読してみる</h2>
+        <p class="muted" id="mic-note"></p>
+        <div class="row"><button class="mic-big" id="mic" disabled>🎤</button><span id="live" class="muted"></span></div>
+        <div id="result"></div>
+      </div>
+    </section>
+  </main>
+  <footer>U16 Apps ・ 教科書音読チェッカー</footer>
+
+  <script src="../common/qr.js"></script>
+  <script src="../common/bridge.js"></script>
+  <script src="../common/charts.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

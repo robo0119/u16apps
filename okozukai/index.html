@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>声のおこづかい帳 Web</title>
+  <link rel="icon" href="../icons/okozukai.png">
+  <link rel="apple-touch-icon" href="../icons/okozukai.png">
+  <link rel="stylesheet" href="../common/style.css">
+  <style>
+    :root { --accent: #20b394; }
+    .cat-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+    .say { display: flex; gap: 10px; }
+    .say input { font-size: 1.15rem; }
+    .mic { width: 56px; min-width: 56px; border-radius: 50%; font-size: 1.4rem; }
+    .mic.on { background: var(--bad); }
+    .confirm { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0 12px; }
+    .budget-bar { height: 16px; background: var(--line); border-radius: 8px; overflow: hidden; margin: 10px 0 6px; }
+    .budget-bar span { display: block; height: 100%; }
+    .message { padding: 10px 12px; border-radius: 12px; font-weight: 700; }
+    .report-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .report-head h2 { font-size: 1.4rem; margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <img src="../icons/okozukai.png" alt="">
+    <h1>声のおこづかい帳 <small style="opacity:.8">Web</small></h1>
+    <a href="../">ほかのアプリ</a>
+  </header>
+
+  <main>
+    <!-- アプリから共有されたレポート(URLに #d= があるとき) -->
+    <section id="report" class="hidden">
+      <div class="card">
+        <div class="report-head">
+          <div>
+            <span class="shared-badge">アプリから共有されたレポート</span>
+            <h2 id="report-title"></h2>
+          </div>
+          <div class="row no-print">
+            <button onclick="window.print()">印刷する</button>
+            <button class="secondary" id="report-save">このブラウザでも見られるように保存</button>
+          </div>
+        </div>
+        <p class="muted">このページのデータは、リンクの「#」より後ろに入っています。サーバーには送られていません。</p>
+      </div>
+      <div id="report-body"></div>
+    </section>
+
+    <!-- ふつうのWeb版 -->
+    <section id="app">
+      <div class="app-banner no-print">
+        <img src="../icons/okozukai.png" alt="">
+        <div>
+          <b>iPhoneアプリなら、ボタンひとつで声の記録</b><br>
+          <span class="muted">アクションボタンや「Hey Siri、おこづかい帳で記録」で、すぐに録音が始まります。</span>
+        </div>
+        <a class="button" href="u16okozukai://record" id="open-record">アプリで声の記録をする</a>
+      </div>
+
+      <div class="card">
+        <h2>使ったお金を書く</h2>
+        <div class="say">
+          <input id="say" placeholder="例:本屋で680円" autocomplete="off">
+          <button class="mic hidden" id="mic" title="声で入力">🎤</button>
+          <button id="read">読みとる</button>
+        </div>
+        <p class="muted" id="mic-note"></p>
+        <div id="confirm" class="hidden">
+          <div class="confirm">
+            <div><label>金額(円)</label><input id="c-amount" type="number" inputmode="numeric" min="1"></div>
+            <div><label>何に</label><input id="c-item"></div>
+            <div><label>項目</label><select id="c-cat"></select></div>
+            <div><label>日にち</label><input id="c-date" type="date"></div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <button id="c-save">記録する</button>
+            <button class="secondary" id="c-cancel">やめる</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">
+            <button class="secondary" id="prev" aria-label="前の月">◀</button>
+            <span id="month-title"></span>
+            <button class="secondary" id="next" aria-label="次の月">▶</button>
+          </h2>
+          <div class="row"><label for="budget" style="margin:0">予算</label><input id="budget" type="number" min="0" style="width:120px" placeholder="3000"><span>円</span></div>
+        </div>
+        <div id="month-body"></div>
+      </div>
+
+      <div class="card no-print">
+        <h2>アプリに送る</h2>
+        <p class="muted" id="send-summary"></p>
+        <div id="send"></div>
+        <div class="row" style="margin-top:10px"><button class="secondary hidden" id="mark-sent">送り終わった(このリストから消す)</button></div>
+      </div>
+
+      <div class="card no-print">
+        <h2>Web版について</h2>
+        <p class="muted">記録はこのブラウザの中だけに保存されます(サーバーには送りません)。声の入力はブラウザの機能を使うので、Chrome では声がGoogleのサーバーに送られます。アプリ(iPhoneの中で認識)のほうが安心です。</p>
+      </div>
+    </section>
+  </main>
+  <footer>U16 Apps ・ 声のおこづかい帳</footer>
+
+  <script src="../common/qr.js"></script>
+  <script src="../common/bridge.js"></script>
+  <script src="../common/charts.js"></script>
+  <script src="parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

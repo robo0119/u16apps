@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>U16 Apps</title>
+  <link rel="stylesheet" href="common/style.css">
+  <style>
+    :root { --accent: #3b3f8f; }
+    .hero { text-align: center; padding: 28px 16px 8px; }
+    .hero h1 { margin: 0; font-size: 1.8rem; }
+    .apps { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+    .app { display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; transition: transform .15s; }
+    .app:hover { transform: translateY(-3px); }
+    .app img { width: 72px; height: 72px; border-radius: 18px; }
+    .app h2 { margin: 4px 0 0; font-size: 1.05rem; }
+    .app .role { font-size: .85rem; color: var(--muted); }
+    .flow { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; text-align: center; }
+    .flow .side { background: var(--bg); border-radius: 14px; padding: 12px; }
+    .flow .arrows { font-size: .85rem; color: var(--muted); line-height: 2; }
+    @media (max-width: 560px) { .flow { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>U16 Apps</h1>
+    <p class="muted">iPhoneで記録して、パソコンで見る・入力する。4つの学習・生活アプリのWeb版です。</p>
+  </div>
+  <main>
+    <div class="apps">
+      <a class="card app" href="okozukai/">
+        <img src="icons/okozukai.png" alt="">
+        <h2>声のおこづかい帳</h2>
+        <span class="role">Webでできること:おうちの人に見せる月のレポート/パソコンで入力してアプリへ</span>
+      </a>
+      <a class="card app" href="planner/">
+        <img src="icons/studyplanner.png" alt="">
+        <h2>学習プランナー</h2>
+        <span class="role">Webでできること:時間割・テスト日程を大きな画面でまとめて入力してアプリへ/今週の計画を共有</span>
+      </a>
+      <a class="card app" href="missnote/">
+        <img src="icons/missnote.png" alt="">
+        <h2>ミス診断ノート</h2>
+        <span class="role">Webでできること:ミスの分析レポートを先生に見せる・印刷する/写真なしの手早い記録</span>
+      </a>
+      <a class="card app" href="ondoku/">
+        <img src="icons/ondokuchecker.png" alt="">
+        <h2>教科書音読チェッカー</h2>
+        <span class="role">Webでできること:長い英文をパソコンで貼り付けてアプリへ/上達レポート/Webでも音読練習</span>
+      </a>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>アプリとWebのつながり方</h2>
+      <div class="flow">
+        <div class="side"><b>📱 iPhoneアプリ</b><br><span class="muted">撮影・声・通知など、いつも使うところ</span></div>
+        <div class="arrows">「Webで共有」→ リンク<br>← QRコードを読む</div>
+        <div class="side"><b>💻 Web(このサイト)</b><br><span class="muted">大きな画面で見る・印刷・まとめて入力</span></div>
+      </div>
+      <p class="muted" style="margin-top:12px">データはサーバーに保存しません。アプリからのリンクでは、データはURLの「#」より後ろに入っていて、ブラウザの外には出ません。Webで入力したものは、このブラウザの中だけに保存されます。</p>
+    </div>
+  </main>
+  <footer>U16 Apps</footer>
+</body>
+</html>
