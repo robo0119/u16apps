@@ -193,7 +193,7 @@
   async function renderSend() {
     if (!Bridge.supported) { $('send').innerHTML = '<p class="warn">このブラウザは古いため、アプリに送れません。</p>'; return; }
     const payload = await Bridge.encode(setup);
-    Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'このQRコードをiPhoneで読み取ると、学習プランナーアプリに入ります。');
+    Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'iPhoneで読むとアプリに入ります');
   }
 
   function renderAll() {

@@ -126,14 +126,14 @@
     const unsent = items.filter(i => !i.sent);
     $('mark-sent').classList.toggle('hidden', unsent.length === 0);
     if (!unsent.length) {
-      $('send-summary').textContent = 'Webで書いた記録は、ここからiPhoneのアプリに送れます。いまは送るものはありません。';
+      $('send-summary').textContent = '送る記録はありません';
       $('send').innerHTML = '';
       return;
     }
-    $('send-summary').textContent = `まだアプリに送っていない記録が ${unsent.length} 件あります(合計 ${yen(unsent.reduce((s, i) => s + i.amount, 0))})。`;
+    $('send-summary').textContent = `未送信 ${unsent.length}件・${yen(unsent.reduce((s, i) => s + i.amount, 0))}`;
     if (!Bridge.supported) { $('send').innerHTML = '<p class="warn">このブラウザは古いため、アプリに送れません。</p>'; return; }
     const payload = await Bridge.encode({ v: 1, kind: 'okozukai', items: unsent.map(({ date, amount, item, cat }) => ({ date, amount, item, cat })) });
-    Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'このQRコードをiPhoneで読み取ると、おこづかい帳アプリに記録が入ります。');
+    Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'iPhoneで読むとアプリに入ります');
   }
 
   function render() { renderMonth(); renderSend(); }
@@ -167,9 +167,9 @@
   // ブラウザの音声認識(使えるブラウザだけ)
   function setupMic() {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) { $('mic-note').textContent = 'このブラウザは声の入力に対応していません。文字で入力してください。'; return; }
+    if (!Recognition) { $('mic-note').textContent = ''; return; }
     $('mic').classList.remove('hidden');
-    $('mic-note').textContent = '🎤で声の入力もできます(ブラウザによっては声がサーバーに送られます)。';
+    $('mic-note').textContent = '';
     let rec = null;
     $('mic').onclick = () => {
       if (rec) { rec.stop(); return; }
@@ -200,10 +200,10 @@
     $('mark-sent').onclick = () => { items.forEach(i => { i.sent = true; }); saveItems(); renderSend(); };
     // パソコンで見ているときは、「アプリで記録」もQRコードにして、iPhoneで読めばすぐ録音できるようにする
     if (!Bridge.isIOS()) {
-      $('open-record').textContent = 'iPhoneで読むと録音が始まるQR';
+      $('open-record').textContent = '録音用QR';
       $('open-record').onclick = (e) => {
         e.preventDefault();
-        Bridge.renderSendPanel($('send'), 'u16okozukai://record', 'iPhoneのカメラでこのQRコードを読むと、おこづかい帳アプリが開いてすぐに録音が始まります。');
+        Bridge.renderSendPanel($('send'), 'u16okozukai://record', 'iPhoneで読むとすぐ録音');
         $('send').scrollIntoView({ behavior: 'smooth' });
       };
     }

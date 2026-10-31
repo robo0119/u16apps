@@ -81,7 +81,7 @@
     if (!text) { $('send').innerHTML = '<p class="muted">英文を貼り付けると、ここにQRコードが出ます。</p>'; return; }
     if (!Bridge.supported) { $('send').innerHTML = '<p class="warn">このブラウザは古いため、アプリに送れません。</p>'; return; }
     const payload = await Bridge.encode({ v: 1, kind: 'ondoku', passage: text });
-    Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'このQRコードをiPhoneで読み取ると、音読チェッカーアプリの「読む英文」に入ります。そのままマイクボタンで音読できます。');
+    Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'iPhoneで読むとRecitoに入ります');
   }
 
   function setupMic() {

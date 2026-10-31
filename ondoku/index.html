@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>教科書音読チェッカー Web</title>
+  <title>Recito | Sotaのapp</title>
   <link rel="icon" href="../icons/ondokuchecker.png">
   <link rel="apple-touch-icon" href="../icons/ondokuchecker.png">
   <link rel="stylesheet" href="../common/style.css">
@@ -21,18 +21,17 @@
 </head>
 <body>
   <header class="topbar">
-    <img src="../icons/ondokuchecker.png" alt="">
-    <h1>音読チェッカー <small style="opacity:.8">Web</small></h1>
-    <a href="../">ほかのアプリ</a>
+    <picture><source srcset="../icons/ondokuchecker-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/ondokuchecker.png" alt=""></picture>
+    <h1>Recito</h1>
+    <a href="../">Sotaのapp</a>
   </header>
   <main>
     <section id="report" class="hidden"></section>
 
     <section id="app">
       <div class="app-banner no-print">
-        <img src="../icons/ondokuchecker.png" alt="">
-        <div><b>長い英文は、パソコンで貼り付けてアプリへ</b><br>
-          <span class="muted">教科書の英文をここに貼り付けると、QRコードでiPhoneのアプリの「読む英文」に送れます。</span></div>
+        <picture><source srcset="../icons/ondokuchecker-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/ondokuchecker.png" alt=""></picture>
+        <div><b>英文をアプリへ送る</b><br><span class="muted">PCで貼り付け → QRコード</span></div>
       </div>
 
       <div class="card">
@@ -54,7 +53,7 @@
       </div>
     </section>
   </main>
-  <footer>U16 Apps ・ 教科書音読チェッカー</footer>
+  <footer>Sotaのapp</footer>
 
   <script src="../common/qr.js"></script>
   <script src="../common/bridge.js"></script>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>声のおこづかい帳 Web</title>
+  <title>Coinvoice | Sotaのapp</title>
   <link rel="icon" href="../icons/okozukai.png">
   <link rel="apple-touch-icon" href="../icons/okozukai.png">
   <link rel="stylesheet" href="../common/style.css">
@@ -24,9 +24,9 @@
 </head>
 <body>
   <header class="topbar">
-    <img src="../icons/okozukai.png" alt="">
-    <h1>声のおこづかい帳 <small style="opacity:.8">Web</small></h1>
-    <a href="../">ほかのアプリ</a>
+    <picture><source srcset="../icons/okozukai-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/okozukai.png" alt=""></picture>
+    <h1>Coinvoice</h1>
+    <a href="../">Sotaのapp</a>
   </header>
 
   <main>
@@ -51,12 +51,9 @@
     <!-- ふつうのWeb版 -->
     <section id="app">
       <div class="app-banner no-print">
-        <img src="../icons/okozukai.png" alt="">
-        <div>
-          <b>iPhoneアプリなら、ボタンひとつで声の記録</b><br>
-          <span class="muted">アクションボタンや「Hey Siri、おこづかい帳で記録」で、すぐに録音が始まります。</span>
-        </div>
-        <a class="button" href="u16okozukai://record" id="open-record">アプリで声の記録をする</a>
+        <picture><source srcset="../icons/okozukai-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/okozukai.png" alt=""></picture>
+        <div><b>ボタンひとつで声の記録</b><br><span class="muted">アクションボタン・Siri</span></div>
+        <a class="button" href="u16okozukai://record" id="open-record">アプリで録音</a>
       </div>
 
       <div class="card">
@@ -99,14 +96,9 @@
         <div id="send"></div>
         <div class="row" style="margin-top:10px"><button class="secondary hidden" id="mark-sent">送り終わった(このリストから消す)</button></div>
       </div>
-
-      <div class="card no-print">
-        <h2>Web版について</h2>
-        <p class="muted">記録はこのブラウザの中だけに保存されます(サーバーには送りません)。声の入力はブラウザの機能を使うので、Chrome では声がGoogleのサーバーに送られます。アプリ(iPhoneの中で認識)のほうが安心です。</p>
-      </div>
     </section>
   </main>
-  <footer>U16 Apps ・ 声のおこづかい帳</footer>
+  <footer>Sotaのapp</footer>
 
   <script src="../common/qr.js"></script>
   <script src="../common/bridge.js"></script>

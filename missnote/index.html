@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ミス診断ノート Web</title>
+  <title>Errata | Sotaのapp</title>
   <link rel="icon" href="../icons/missnote.png">
   <link rel="apple-touch-icon" href="../icons/missnote.png">
   <link rel="stylesheet" href="../common/style.css">
@@ -19,18 +19,17 @@
 </head>
 <body>
   <header class="topbar">
-    <img src="../icons/missnote.png" alt="">
-    <h1>ミス診断ノート <small style="opacity:.8">Web</small></h1>
-    <a href="../">ほかのアプリ</a>
+    <picture><source srcset="../icons/missnote-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/missnote.png" alt=""></picture>
+    <h1>Errata</h1>
+    <a href="../">Sotaのapp</a>
   </header>
   <main>
     <section id="report" class="hidden"></section>
 
     <section id="app">
       <div class="app-banner no-print">
-        <img src="../icons/missnote.png" alt="">
-        <div><b>写真はアプリで、メモはパソコンで</b><br>
-          <span class="muted">Webでは写真なしで手早く記録できます。QRコードでアプリに送ると、あとから写真を足せます。</span></div>
+        <picture><source srcset="../icons/missnote-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/missnote.png" alt=""></picture>
+        <div><b>写真なしで記録</b><br><span class="muted">QRコードでアプリへ</span></div>
       </div>
 
       <div class="card">
@@ -53,10 +52,10 @@
         <div id="send"></div>
         <div class="row" style="margin-top:10px"><button class="secondary hidden" id="mark-sent">送り終わった</button></div>
       </div>
-      <p class="muted no-print">記録はこのブラウザの中だけに保存されます。</p>
+      
     </section>
   </main>
-  <footer>U16 Apps ・ ミス診断ノート</footer>
+  <footer>Sotaのapp</footer>
 
   <script src="../common/qr.js"></script>
   <script src="../common/bridge.js"></script>

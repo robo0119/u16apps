@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>学習プランナー Web</title>
+  <title>StudyPilot | Sotaのapp</title>
   <link rel="icon" href="../icons/studyplanner.png">
   <link rel="apple-touch-icon" href="../icons/studyplanner.png">
   <link rel="stylesheet" href="../common/style.css">
@@ -29,9 +29,9 @@
 </head>
 <body>
   <header class="topbar">
-    <img src="../icons/studyplanner.png" alt="">
-    <h1>学習プランナー <small style="opacity:.8">Web</small></h1>
-    <a href="../">ほかのアプリ</a>
+    <picture><source srcset="../icons/studyplanner-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/studyplanner.png" alt=""></picture>
+    <h1>StudyPilot</h1>
+    <a href="../">Sotaのapp</a>
   </header>
 
   <main>
@@ -41,9 +41,8 @@
     <!-- 入力(エディター) -->
     <section id="editor">
       <div class="app-banner no-print">
-        <img src="../icons/studyplanner.png" alt="">
-        <div><b>パソコンの大きな画面で、まとめて入力</b><br>
-          <span class="muted">時間割・部活・テストの日程・成績を入れて、最後のQRコードをiPhoneで読むと、アプリの計画に反映されます。</span></div>
+        <picture><source srcset="../icons/studyplanner-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/studyplanner.png" alt=""></picture>
+        <div><b>PCでまとめて入力</b><br><span class="muted">QRコードでアプリへ</span></div>
       </div>
       <div id="loaded-notice" class="notice hidden"></div>
 
@@ -125,7 +124,7 @@
       </div>
     </section>
   </main>
-  <footer>U16 Apps ・ 学習プランナー</footer>
+  <footer>Sotaのapp</footer>
 
   <script src="../common/qr.js"></script>
   <script src="../common/bridge.js"></script>

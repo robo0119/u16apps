@@ -75,15 +75,10 @@
       const qr = (() => { try { return global.QR.toSVG(link, { ecl: 'L' }); } catch (e) { return null; } })();
       container.innerHTML = `
         <div class="send-panel">
-          ${qr ? `<div class="qr">${qr}</div>` : '<p class="warn">データが多すぎてQRコードにできません。数を減らしてください。</p>'}
+          ${qr ? `<div class="qr">${qr}</div>` : '<p class="warn">データが多すぎます</p>'}
           <div class="send-text">
             <p>${note}</p>
-            <ol class="steps">
-              <li>iPhoneの<b>カメラ</b>でこのQRコードを写す</li>
-              <li>出てきた通知をタップ →「開く」</li>
-              <li>アプリで内容を確かめて「取り込む」</li>
-            </ol>
-            <a class="button" href="${link}">iPhoneでこのページを見ているときはここをタップ</a>
+            <a class="button" href="${link}">iPhoneで開く</a>
           </div>
         </div>`;
     },

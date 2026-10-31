@@ -97,11 +97,11 @@
   async function renderSend() {
     const unsent = problems.filter(p => !p.sent);
     $('mark-sent').classList.toggle('hidden', !unsent.length);
-    if (!unsent.length) { $('send-summary').textContent = 'Webで書いた問題は、ここからアプリに送れます。いまは送るものはありません。'; $('send').innerHTML = ''; return; }
-    $('send-summary').textContent = `まだアプリに送っていない問題が ${unsent.length} 問あります。`;
+    if (!unsent.length) { $('send-summary').textContent = '送る問題はありません'; $('send').innerHTML = ''; return; }
+    $('send-summary').textContent = `未送信 ${unsent.length}問`;
     if (!Bridge.supported) { $('send').innerHTML = '<p class="warn">このブラウザは古いため、アプリに送れません。</p>'; return; }
     const payload = await Bridge.encode({ v: 1, kind: 'missnote', problems: unsent.map(({ d, s, u, m, memo }) => ({ d, s, u, m, memo, rv: 0, ok: 0 })) });
-    Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'このQRコードをiPhoneで読み取ると、ミス診断ノートアプリに問題が入ります。');
+    Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'iPhoneで読むとアプリに入ります');
   }
 
   function startApp() {
