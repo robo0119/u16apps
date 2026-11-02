@@ -1,0 +1,157 @@
+// Recito Web版のライブラリ(英検・リスニング・模試の長文を保存し、iPhoneのRecitoと同期する)
+// 項目名は iOS版(OndokuChecker/Sync/LibrarySync.swift)と同じ:title, category, text, createdAt, lastPracticed, bestAccuracy
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = Bridge.esc;
+  const CATEGORIES = ['英検', 'リスニング', '模試の長文', '教科書', 'その他'];
+
+  // ---- このページのデータ置き場(StudyPilot の store.js と同じ形。sync.js がこれを使う)----
+  const KEY = 'ondoku.v2';
+  const listeners = [];
+  /** 保存してあるデータを読む */
+  function load() {
+    let data = {};
+    try { data = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { data = {}; }
+    if (!data.passages) data.passages = {};
+    return data;
+  }
+  const Store = {
+    COLLECTIONS: ['passages'],
+    SYNC_KEY: 'ondoku.sync',
+    data: load(),
+    save() { try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch (e) { /* 容量など */ } listeners.forEach(fn => fn()); },
+    all(c) { return Object.entries(this.data[c]).map(([id, f]) => ({ id, ...f })); },
+    get(c, id) { const f = this.data[c][id]; return f ? { id, ...f } : null; },
+    put(c, id, fields) { const copy = { ...fields }; delete copy.id; this.data[c][id] = copy; return id; },
+    remove(c, id) { delete this.data[c][id]; },
+    newID() { return (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).toUpperCase(); },
+  };
+
+  // ---- 段落の分け方(iOS版の PassageSplitter と同じ)----
+
+  const wordCount = (t) => t.split(/[\s—–-]+/).filter(w => /[A-Za-z0-9]/.test(w)).length;
+  /** 空行で分ける(なければ改行で)。90語より長い段落は、文の切れ目で90語以内に分ける */
+  function paragraphs(text) {
+    const norm = text.replace(/\r\n/g, '\n');
+    let blocks = norm.split('\n\n');
+    if (blocks.length === 1) blocks = norm.split('\n');
+    return blocks.map(b => b.replace(/\n/g, ' ').trim()).filter(Boolean).flatMap(p => {
+      if (wordCount(p) <= 90) return [p];
+      const out = []; let cur = '';
+      (p.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [p]).map(s => s.trim()).forEach(s => {
+        const joined = cur ? cur + ' ' + s : s;
+        if (cur && wordCount(joined) > 90) { out.push(cur); cur = s; } else cur = joined;
+      });
+      if (cur) out.push(cur);
+      return out;
+    });
+  }
+
+  // ---- 画面 ----
+
+  const state = { editing: null, open: null, message: '' };
+
+  /** ライブラリの部分を描く */
+  function render() {
+    const user = Auth.user;
+    const list = Store.all('passages').sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    let html = '<h2>ライブラリ</h2>';
+    if (!Sync.configured()) html += '<p class="muted">同期の設定がありません</p>';
+    else if (!user) {
+      html += `<p class="muted">StudyPilot・iPhoneのRecitoと同じアカウントでログインすると、ここに入れた文章がiPhoneに届きます。</p>
+        <div class="row"><input id="lib-email" type="email" placeholder="メールアドレス" autocomplete="username" style="flex:1;min-width:180px">
+        <input id="lib-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="flex:1;min-width:140px">
+        <button data-lib="login">ログイン</button></div>`;
+    } else {
+      html += `<p class="muted">ログイン中:${esc(user.email)} ${Sync.isSyncing ? '・同期中…' : Sync.lastError ? `・<span class="bad">${esc(Sync.lastError)}</span>` : Sync.lastSync ? '・同期済み ✓' : ''}
+        <button class="secondary" data-lib="sync" style="min-height:32px;padding:4px 12px">同期</button></p>`;
+    }
+    if (state.message) html += `<p class="bad">${esc(state.message)}</p>`;
+    if (state.editing) {
+      const e = state.editing;
+      html += `<div class="card" style="box-shadow:none;border:1px solid var(--line)">
+        <div class="row"><input id="lib-title" value="${esc(e.title)}" placeholder="題名(例:2024年度第2回 大問3)" style="flex:2;min-width:200px">
+        <select id="lib-cat" style="flex:1;min-width:120px">${CATEGORIES.map(c => `<option ${c === e.category ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+        <textarea id="lib-text" spellcheck="false" style="margin-top:8px;font-family:Georgia,serif;min-height:200px" placeholder="英文を貼り付け(空行で段落に分かれます)">${esc(e.text)}</textarea>
+        <div class="row" style="margin-top:8px"><button data-lib="save">保存</button><button class="secondary" data-lib="cancel">やめる</button></div></div>`;
+    } else {
+      html += '<button data-lib="new">＋ 文章を追加</button>';
+    }
+    CATEGORIES.forEach(cat => {
+      const items = list.filter(p => (p.category || 'その他') === cat);
+      if (!items.length) return;
+      html += `<h3 style="margin:18px 0 6px">${esc(cat)}</h3>`;
+      items.forEach(p => {
+        const paras = paragraphs(p.text || '');
+        html += `<div style="border-bottom:1px solid var(--line);padding:8px 0">
+          <div class="row" style="justify-content:space-between"><div><b>${esc(p.title)}</b>
+            <span class="muted">${wordCount(p.text || '')}語・${paras.length}段落${p.bestAccuracy != null ? `・最高 ${Math.round(p.bestAccuracy)}%` : ''}</span></div>
+            <div class="row"><button class="secondary" data-lib="use" data-id="${p.id}" style="min-height:36px;padding:4px 12px">全文で練習</button>
+            <button class="secondary" data-lib="open" data-id="${p.id}" style="min-height:36px;padding:4px 12px">${state.open === p.id ? '閉じる' : '段落'}</button>
+            <button class="secondary" data-lib="edit" data-id="${p.id}" style="min-height:36px;padding:4px 12px">編集</button>
+            <button class="danger" data-lib="delete" data-id="${p.id}">消す</button></div></div>
+          ${state.open === p.id ? paras.map((t, i) => `<p style="margin:8px 0"><button class="secondary" data-lib="para" data-id="${p.id}" data-i="${i}" style="min-height:32px;padding:2px 10px">段落${i + 1}で練習</button>
+            <span class="muted">${esc(t.slice(0, 90))}${t.length > 90 ? '…' : ''}</span></p>`).join('') : ''}
+        </div>`;
+      });
+    });
+    $('library').innerHTML = html;
+  }
+
+  /** 英文の欄に入れて、練習できるようにする */
+  function usePassage(text) {
+    const box = $('passage');
+    box.value = text;
+    box.dispatchEvent(new Event('input'));
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  /** 保存して同期する */
+  async function commit() {
+    Store.save();
+    render();
+    if (Auth.user) { await Sync.run(Store); render(); }
+  }
+
+  const ACTIONS = {
+    async login() {
+      state.message = '';
+      try { await Auth.signIn($('lib-email').value.trim(), $('lib-pass').value); await Sync.run(Store); }
+      catch (e) { state.message = e.message; }
+      render();
+    },
+    async sync() { render(); await Sync.run(Store); render(); },
+    new() { state.editing = { id: null, title: '', category: '英検', text: '' }; render(); },
+    edit(el) { state.editing = { ...Store.get('passages', el.dataset.id) }; render(); },
+    cancel() { state.editing = null; render(); },
+    save() {
+      const text = $('lib-text').value.trim();
+      if (!text) { alert('英文を入れてください'); return; }
+      const e = state.editing;
+      const id = e.id || Store.newID();
+      const old = Store.get('passages', id);
+      const title = $('lib-title').value.trim() || text.split(/\s+/).slice(0, 5).join(' ');
+      Store.put('passages', id, { title, category: $('lib-cat').value, text,
+        createdAt: old ? old.createdAt : Date.now(), lastPracticed: old ? old.lastPracticed ?? null : null, bestAccuracy: old ? old.bestAccuracy ?? null : null });
+      state.editing = null;
+      commit();
+    },
+    delete(el) { if (!confirm('この文章を消しますか?(iPhoneからも消えます)')) return; Store.remove('passages', el.dataset.id); commit(); },
+    open(el) { state.open = state.open === el.dataset.id ? null : el.dataset.id; render(); },
+    use(el) { usePassage(Store.get('passages', el.dataset.id).text); },
+    para(el) { usePassage(paragraphs(Store.get('passages', el.dataset.id).text)[Number(el.dataset.i)]); },
+  };
+
+  document.addEventListener('click', (ev) => {
+    const el = ev.target.closest('[data-lib]');
+    if (!el) return;
+    ev.preventDefault();
+    ACTIONS[el.dataset.lib](el);
+  });
+
+  window.RecitoLibrary = { paragraphs };
+  render();
+  if (Auth.user) ACTIONS.sync();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Auth.user && !state.editing) ACTIONS.sync(); });
+})();

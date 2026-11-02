@@ -32,8 +32,10 @@
     <section id="app">
       <div class="app-banner no-print">
         <picture><source srcset="../icons/ondokuchecker-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/ondokuchecker.png" alt=""></picture>
-        <div><b>英文をアプリへ送る</b><br><span class="muted">PCで貼り付け → QRコード</span></div>
+        <div><b>英文をアプリへ</b><br><span class="muted">ライブラリに保存すると、同じアカウントのiPhoneに届きます(QRコードでも送れます)</span></div>
       </div>
+
+      <div class="card" id="library"></div>
 
       <div class="card">
         <h2>英文</h2>
@@ -60,5 +62,8 @@
   <script src="../common/bridge.js"></script>
   <script src="../common/charts.js"></script>
   <script src="app.js"></script>
+  <script src="../common/firebase-config.js"></script>
+  <script src="../common/sync.js"></script>
+  <script src="library.js"></script>
 </body>
 </html>

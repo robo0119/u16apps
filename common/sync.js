@@ -1,4 +1,5 @@
-// StudyPilot Web版の同期(Firebase Authentication と Firestore の REST API。SDK は使わない)
+// StudyPilot・Recito Web版の同期(Firebase Authentication と Firestore の REST API。SDK は使わない)
+// ログインは2つのページで共通。同期の記録は store.SYNC_KEY ごとに分ける
 // iOS版(StudyPlanner/Sync/SyncEngine.swift)と同じ手順:
 // 1. 受け取る:前回より後に変わった文書(_u > 前回)を受け取り、このブラウザに反映(同じ文書はサーバーを優先)
 // 2. 送る:前回そろえたときから変わった文書を送る。消した文書は「削除」の印(_d)を送る
@@ -6,7 +7,8 @@
 (function (root) {
   'use strict';
   const AUTH_KEY = 'planner.auth';
-  const STATE_KEY = 'planner.sync';
+  const STATE_KEYS = ['planner.sync', 'ondoku.sync'];
+  const stateKey = (store) => store.SYNC_KEY || 'planner.sync';
   const cfg = () => root.FIREBASE_CONFIG || {};
   const configured = () => !!(cfg().apiKey && cfg().projectId);
   const docsPath = () => `projects/${cfg().projectId}/databases/(default)/documents`;
@@ -86,7 +88,7 @@
     /** ログイン */
     signIn(email, password) { return this._sign('accounts:signInWithPassword', email, password); },
     /** ログアウト(このブラウザのログイン情報と同期の記録を消す。データは残す) */
-    signOut() { this.user = null; idToken = null; localStorage.removeItem(STATE_KEY); },
+    signOut() { this.user = null; idToken = null; STATE_KEYS.forEach(k => localStorage.removeItem(k)); },
 
     async _sign(endpoint, email, password) {
       if (!configured()) throw new Error('Firebaseの設定がまだです');
@@ -117,7 +119,7 @@
   // ---- 同期 ----
 
   /** 前回の同期の記録 */
-  function loadState() { try { return JSON.parse(localStorage.getItem(STATE_KEY)) || null; } catch (e) { return null; } }
+  function loadState(store) { try { return JSON.parse(localStorage.getItem(stateKey(store))) || null; } catch (e) { return null; } }
 
   let running = null;
   const Sync = {
@@ -136,11 +138,11 @@
     async _run(store) {
       try {
         const { uid, token } = await Auth.token();
-        let state = loadState();
+        let state = loadState(store);
         if (!state || state.uid !== uid) state = { uid, lastPull: '1970-01-01T00:00:00Z', known: {} };
         await pull(store, uid, token, state);
         await push(store, uid, token, state);
-        localStorage.setItem(STATE_KEY, JSON.stringify(state));
+        localStorage.setItem(stateKey(store), JSON.stringify(state));
         store.save();
         this.lastSync = new Date();
         this.lastError = null;
