@@ -9,127 +9,90 @@
   <link rel="stylesheet" href="../common/style.css">
   <script src="../common/gate.js"></script>
   <style>
-    :root { --accent: #5b4ee0; }
-    .tt { width: 100%; border-collapse: separate; border-spacing: 4px; }
-    .tt th { text-align: center; font-size: .85rem; color: var(--muted); border: none; padding: 2px; }
+    :root { --accent: #5b4ee0; --ok: #2f9e57; --tri: #f08a24; --ng: #e2474f; --ticket: #a35ee6; }
+    .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+    .tabs button { background: transparent; color: var(--muted); min-height: 40px; padding: 6px 14px; white-space: nowrap; }
+    .tabs button.on { background: var(--accent-soft); color: var(--accent); }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
+    .mode-通常 { background: color-mix(in srgb, #3478f6 15%, transparent); color: #3478f6; }
+    .mode-考査 { background: color-mix(in srgb, var(--ng) 15%, transparent); color: var(--ng); }
+    .mode-軽め { background: color-mix(in srgb, #1aa8bf 15%, transparent); color: #1aa8bf; }
+    .progress { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+    .progress i { display: block; height: 100%; border-radius: 5px; background: var(--accent); }
+    .streak-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .flame { text-align: center; font-weight: 800; font-size: 1.1rem; min-width: 56px; }
+    .flame span { display: block; font-size: 1.8rem; line-height: 1; }
+    .qrow { padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .qrow:last-child { border-bottom: none; }
+    .qhead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .qhead b.name { flex: 1; min-width: 120px; }
+    .weak { background: color-mix(in srgb, var(--ng) 15%, transparent); color: var(--ng); border-radius: 999px; padding: 1px 8px; font-size: .75rem; font-weight: 700; }
+    .chipgrid { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .pchip { min-width: 44px; min-height: 48px; padding: 2px 6px; flex-direction: column; gap: 0; border-radius: 10px; background: var(--accent-soft); color: var(--text); font-weight: 600; line-height: 1.15; }
+    .pchip small { font-size: .7rem; color: var(--muted); }
+    .pchip.m-○ { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+    .pchip.m-△ { background: color-mix(in srgb, var(--tri) 22%, transparent); color: var(--tri); }
+    .pchip.m-× { background: color-mix(in srgb, var(--ng) 22%, transparent); color: var(--ng); }
+    .pchip.sel { outline: 2px solid var(--accent); }
+    .markbar { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .markbar button { min-height: 40px; padding: 6px 16px; }
+    .b-○ { background: var(--ok) !important; } .b-△ { background: var(--tri) !important; } .b-× { background: var(--ng) !important; }
+    .task { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: flex-start; }
+    .task input { width: 22px; min-height: 22px; height: 22px; margin-top: 3px; flex: none; accent-color: var(--accent); }
+    .task .reason { color: var(--muted); font-size: .85rem; }
+    .task.done .c { text-decoration: line-through; color: var(--muted); }
+    .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+    .cal .h { font-size: .8rem; color: var(--muted); }
+    .cal .d { min-height: 46px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; font-size: .95rem; }
+    .cal .d small { font-size: .65rem; line-height: 1; }
+    .cal .achieved { background: color-mix(in srgb, var(--ok) 40%, transparent); }
+    .cal .ticket { background: color-mix(in srgb, var(--ticket) 30%, transparent); }
+    .cal .missed { background: color-mix(in srgb, var(--muted) 15%, transparent); }
+    .cal .today { outline: 2px solid var(--accent); font-weight: 800; }
+    .legend span { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; font-size: .85rem; }
+    .legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+    .tt { width: 100%; border-collapse: separate; border-spacing: 3px; }
+    .tt th { text-align: center; font-size: .8rem; color: var(--muted); border: none; padding: 2px; }
     .tt td { padding: 0; border: none; }
-    .tt select { min-height: 40px; padding: 4px; font-size: .85rem; text-align: center; border-radius: 8px; }
-    .tt .cell { min-height: 40px; border-radius: 8px; color: #fff; font-size: .85rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .tt select { min-height: 38px; padding: 2px; font-size: .8rem; text-align: center; border-radius: 8px; }
     .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
     .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px 4px 12px; border-radius: 999px; color: #fff; font-weight: 700; }
     .chip button { min-height: 24px; padding: 0 8px; background: rgba(255,255,255,.25); border-radius: 999px; }
-    .form-grid { display: grid; gap: 0 12px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); align-items: end; }
-    .task { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-    .task .check { font-size: 1.4rem; line-height: 1; }
-    .task .reason { color: var(--muted); font-size: .85rem; }
-    .formula td { padding: 4px 6px; }
+    .fg { display: grid; gap: 0 12px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); align-items: end; }
+    .checks label { display: inline-flex; gap: 4px; align-items: center; margin-right: 10px; color: var(--text); font-size: .95rem; }
+    .checks input { width: auto; min-height: 0; }
+    .mrow { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .mrow .grow { flex: 1; min-width: 0; }
+    .route-row { display: grid; grid-template-columns: 1.4fr .7fr .7fr 1.2fr auto; gap: 6px; margin-bottom: 6px; }
     .notice { background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; }
-    .subject-checks label { display: inline-flex; gap: 4px; align-items: center; margin-right: 10px; color: var(--text); }
-    .subject-checks input { width: auto; min-height: 0; }
+    .sync-dot { font-size: .8rem; opacity: .9; }
+    @media (max-width: 520px) { .route-row { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
 <body>
   <header class="topbar">
     <picture><source srcset="../icons/studyplanner-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/studyplanner.png" alt=""></picture>
     <h1>StudyPilot</h1>
+    <span class="sync-dot" id="sync-dot"></span>
     <a href="../">Sotaのapp</a>
   </header>
+  <nav class="tabs" id="tabs">
+    <button data-act="tab" data-tab="today">今日</button>
+    <button data-act="tab" data-tab="materials">教材</button>
+    <button data-act="tab" data-tab="calendar">カレンダー</button>
+    <button data-act="tab" data-tab="analysis">分析</button>
+    <button data-act="tab" data-tab="setup">登録</button>
+  </nav>
+  <main id="view"></main>
+  <footer>データはこのブラウザと、ログインしていれば Firebase(本人だけが読み書きできる場所)に保存されます。</footer>
 
-  <main>
-    <!-- アプリから共有された今日の計画 -->
-    <section id="report" class="hidden"></section>
-
-    <!-- 入力(エディター) -->
-    <section id="editor">
-      <div class="app-banner no-print">
-        <picture><source srcset="../icons/studyplanner-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/studyplanner.png" alt=""></picture>
-        <div><b>PCでまとめて入力</b><br><span class="muted">QRコードでアプリへ</span></div>
-      </div>
-      <div id="loaded-notice" class="notice hidden"></div>
-
-      <div class="card">
-        <h2>教科</h2>
-        <div class="chips" id="subjects"></div>
-        <div class="row">
-          <input id="new-subject" placeholder="教科を追加(例:数学)" style="flex:1;min-width:160px">
-          <button id="add-subject">追加</button>
-          <button class="secondary" id="five-subjects">5教科を入れる</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="row" style="justify-content:space-between"><h2 style="margin:0">時間割</h2>
-          <label style="margin:0">1日 <select id="periods" style="width:auto"></select> 時間目まで</label></div>
-        <div style="overflow-x:auto"><table class="tt" id="timetable"></table></div>
-      </div>
-
-      <div class="card">
-        <h2>生活時間</h2>
-        <div class="form-grid">
-          <div><label>起きる</label><input type="time" id="wake"></div>
-          <div><label>寝る</label><input type="time" id="sleep"></div>
-          <div><label>学校が始まる</label><input type="time" id="schoolStart"></div>
-          <div><label>学校が終わる</label><input type="time" id="schoolEnd"></div>
-          <div><label>通学(片道・分)</label><input type="number" id="commute" min="0" step="5"></div>
-          <div><label>食事・お風呂など(分)</label><input type="number" id="living" min="0" step="10"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>毎週の予定(部活・塾)</h2>
-        <table id="weekly-table"></table>
-        <div class="form-grid" style="margin-top:8px">
-          <div><label>名前</label><input id="w-title" value="部活"></div>
-          <div><label>曜日</label><select id="w-day"></select></div>
-          <div><label>始まり</label><input type="time" id="w-start" value="16:10"></div>
-          <div><label>終わり</label><input type="time" id="w-end" value="18:30"></div>
-          <div><button id="add-weekly">追加</button></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>1週間の勉強時間の見通し</h2>
-        <p class="muted">勉強時間 = 起きている時間 − 学校 − 予定 − 食事など − 休憩(空き時間の1/6)。アプリと同じ計算です。</p>
-        <div id="week-forecast"></div>
-      </div>
-
-      <div class="card">
-        <h2>テスト・模試・行事</h2>
-        <table id="events-table"></table>
-        <div class="form-grid" style="margin-top:8px">
-          <div><label>種類</label><select id="e-kind"><option>定期テスト</option><option>模試</option><option>行事</option></select></div>
-          <div><label>名前</label><input id="e-title" value="期末テスト"></div>
-          <div><label>日にち</label><input type="date" id="e-date"></div>
-        </div>
-        <label>テストの教科(選ばなければ全教科)</label>
-        <div class="subject-checks" id="e-subjects"></div>
-        <div class="row" style="margin-top:8px"><button id="add-event">追加</button></div>
-      </div>
-
-      <div class="card">
-        <h2>テストの結果</h2>
-        <table id="scores-table"></table>
-        <div class="form-grid" style="margin-top:8px">
-          <div><label>テストの名前</label><input id="s-test" value="中間テスト"></div>
-          <div><label>日にち</label><input type="date" id="s-date"></div>
-          <div><label>満点</label><input type="number" id="s-max" value="100"></div>
-        </div>
-        <div class="form-grid" id="s-inputs"></div>
-        <div class="row" style="margin-top:8px"><button id="add-scores">結果を追加</button></div>
-      </div>
-
-      <div class="card no-print">
-        <h2>アプリに送る</h2>
-        <div id="send"></div>
-        <p class="muted">アプリにある予定や成績は消えません。同じものは二重に入りません。Webで消したものは、アプリでは消えないので、アプリで消してください。</p>
-      </div>
-    </section>
-  </main>
-  <footer>Sotaのapp</footer>
-
-  <script src="../common/qr.js"></script>
   <script src="../common/bridge.js"></script>
   <script src="../common/charts.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="engine.js"></script>
+  <script src="store.js"></script>
+  <script src="sync.js"></script>
+  <script src="logic.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

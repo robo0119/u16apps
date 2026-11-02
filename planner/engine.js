@@ -1,0 +1,372 @@
+// StudyPilot の計画エンジン(iOS版 StudyPlanner/Engine/*.swift と同じ計算)
+// 式を変えるときは、Swift と JS の両方を直し、両方のテストを通すこと
+(function (root) {
+  'use strict';
+
+  // ---- 日付(「yyyy-MM-dd」の文字で扱う。タイムゾーンに左右されない)----
+
+  /** 文字 → その日の0時(端末の時刻) */
+  const toDate = (key) => { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); };
+  /** 日付 → 文字 */
+  const keyOf = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  /** n日後の文字 */
+  const addDays = (key, n) => { const d = toDate(key); d.setDate(d.getDate() + n); return keyOf(d); };
+  /** a から b まで何日か */
+  const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 86400000);
+  /** 曜日(Swift と同じ 1=日 … 7=土) */
+  const weekdayOf = (key) => toDate(key).getDay() + 1;
+
+  // ---- 使える時間(AvailableTime.swift)----
+
+  const BREAK_RATIO = 1 / 6;
+
+  /** 重なっている区間をまとめる */
+  function merge(blocks) {
+    const result = [];
+    blocks.slice().sort((a, b) => a.start - b.start).forEach(b => {
+      const last = result[result.length - 1];
+      if (last && b.start <= last.end) last.end = Math.max(last.end, b.end);
+      else result.push({ start: b.start, end: b.end });
+    });
+    return result;
+  }
+
+  /**
+   * 勉強時間 = 起きている時間 − 学校 − 予定 − 生活 − 休憩
+   * 休憩 = 空き時間 × 1/6(切り上げ)、勉強時間は5分単位に切り捨て
+   */
+  function availableTime(day) {
+    const wake = day.wake;
+    const sleep = day.sleep <= day.wake ? day.sleep + 1440 : day.sleep;
+    const awake = sleep - wake;
+    const clip = (b) => { const s = Math.max(b.start, wake), e = Math.min(b.end, sleep); return e > s ? { start: s, end: e } : null; };
+    const school = day.school ? clip(day.school) : null;
+    const schoolMinutes = school ? school.end - school.start : 0;
+    const all = merge([school, ...day.events.map(clip)].filter(Boolean));
+    const busy = all.reduce((s, b) => s + b.end - b.start, 0);
+    const living = Math.min(day.livingMinutes, Math.max(0, awake - busy));
+    const free = Math.max(0, awake - busy - living);
+    const breaks = Math.ceil(free * BREAK_RATIO);
+    const study = Math.max(0, Math.floor((free - breaks) / 5) * 5);
+    return { awake, school: schoolMinutes, events: busy - schoolMinutes, living, breaks: free - study, study };
+  }
+
+  // ---- 時程(PeriodClock.swift)----
+
+  /** 時程を作る(設定の項目名は Firestore と同じ) */
+  function periodClock(s) {
+    const c = { firstStart: s.firstPeriodStart ?? 520, length: s.periodLength ?? 50, breakLength: s.periodBreak ?? 10,
+      lunchAfter: s.lunchAfter ?? 4, lunchLength: s.lunchLength ?? 45, afterLast: s.afterLast ?? 15 };
+    // 始まり = 1時間目 + (p−1)×(コマ+休み)、昼休みより後は + (昼休み − 休み)
+    c.start = (period) => { const p = Math.max(1, period); let m = c.firstStart + (p - 1) * (c.length + c.breakLength); if (p > c.lunchAfter) m += c.lunchLength - c.breakLength; return m; };
+    c.end = (p) => c.start(p) + c.length;
+    c.schoolEnd = (last) => c.end(last) + c.afterLast;
+    c.block = (from, to) => ({ start: c.start(Math.min(from, to)), end: c.end(Math.max(from, to)) });
+    return c;
+  }
+
+  // ---- ペースの調整(Adaptation.swift)----
+
+  /** 調整率 = 最近の完了率 + 0.1(0.5〜1.0)。記録が3日未満なら1.0 */
+  function loadFactor(days) {
+    const used = days.filter(d => d.planned > 0);
+    if (used.length < 3) return 1;
+    const planned = used.reduce((s, d) => s + d.planned, 0);
+    const done = used.reduce((s, d) => s + Math.min(d.done, d.planned), 0);
+    return Math.min(1, Math.max(0.5, done / planned + 0.1));
+  }
+  const adjustedMinutes = (minutes, factor) => Math.floor(Math.floor(minutes * factor) / 5) * 5;
+
+  // ---- 苦手度と優先度(Weakness.swift / Priority.swift)----
+
+  /** 1回の成績の「できた度」= 得点率(偏差値があれば (偏差値−35)÷30×100 との平均) */
+  function ability(p) {
+    const rate = p.max > 0 ? Math.min(100, Math.max(0, p.score / p.max * 100)) : 0;
+    if (p.deviation == null) return rate;
+    return (rate + Math.min(100, Math.max(0, (p.deviation - 35) / 30 * 100))) / 2;
+  }
+
+  /** 苦手度 = 100 − 最近3回のできた度(3:2:1の重み)+ 10以上下がっていたら+10 */
+  function weakness(points) {
+    const recent = points.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3).map(ability);
+    if (!recent.length) return 50;
+    const w = [3, 2, 1];
+    let total = 0, sum = 0;
+    recent.forEach((v, i) => { total += v * w[i]; sum += w[i]; });
+    let result = 100 - total / sum;
+    if (recent.length >= 2 && recent[1] - recent[0] >= 10) result += 10;
+    return Math.min(100, Math.max(0, result));
+  }
+
+  /** 急ぎ度 = 1 + 2 × max(0, 14 − 日数) ÷ 14 */
+  const urgency = (days) => (days == null || days < 0) ? 1 : 1 + 2 * Math.max(0, 14 - days) / 14;
+
+  /** 優先度 = (0.3 + 0.7 × 苦手度 ÷ 100) × 急ぎ度 × (授業があれば1.1) */
+  const priority = (s, hadClass) => (0.3 + 0.7 * Math.min(100, Math.max(0, s.weakness)) / 100) * urgency(s.daysToTest) * (hadClass ? 1.1 : 1);
+
+  // ---- 1日の時間の計画(PlanEngine.swift)----
+
+  const MIN_TASK = 15, MAX_SUBJECTS = 4;
+
+  /** 時間を優先度に比例して配る(5分単位・15分未満の教科は外す) */
+  function allocate(total, priorities) {
+    const result = priorities.map(() => 0);
+    if (total < MIN_TASK || !priorities.length) return result;
+    const order = priorities.map((_, i) => i).sort((a, b) => priorities[b] - priorities[a] || a - b);
+    let count = Math.min(MAX_SUBJECTS, order.length, Math.floor(total / MIN_TASK));
+    while (count > 0) {
+      const chosen = order.slice(0, count);
+      const sum = chosen.reduce((s, i) => s + priorities[i], 0);
+      const units = Math.floor(total / 5);
+      const exact = {}, given = {};
+      chosen.forEach(i => { exact[i] = sum > 0 ? units * priorities[i] / sum : units / count; given[i] = Math.floor(exact[i]); });
+      let spare = units - chosen.reduce((s, i) => s + given[i], 0);
+      chosen.slice().sort((a, b) => (exact[b] - given[b]) - (exact[a] - given[a])).forEach(i => { if (spare > 0) { given[i]++; spare--; } });
+      if (chosen.every(i => given[i] * 5 >= MIN_TASK)) { chosen.forEach(i => { result[i] = given[i] * 5; }); return result; }
+      count--;
+    }
+    return result;
+  }
+
+  /** 勉強の内容 */
+  function content(s) {
+    if (s.daysToTest != null && s.daysToTest <= 3) return 'テスト範囲の総復習(間違えた問題の解き直し)';
+    if (s.daysToTest != null && s.daysToTest <= 7) return 'テスト範囲の問題集';
+    if (s.weakness >= 60) return '基礎の復習(教科書の例題)';
+    if (s.weakness >= 40) return '問題集の復習';
+    return '応用問題にチャレンジ';
+  }
+
+  /** 選んだ理由(1行) */
+  function reason(s, rank, hadClass) {
+    const parts = [`苦手度${Math.round(s.weakness)}`];
+    if (s.daysToTest != null) {
+      const name = s.testName || 'テスト';
+      parts.push(s.daysToTest === 0 ? `今日が${name}` : `${name}まで${s.daysToTest}日`);
+    } else parts.push('テストはまだ先');
+    if (hadClass) parts.push('今日授業があった');
+    return parts.join('・') + ` → 優先度${rank}位`;
+  }
+
+  /** 1日の計画:やり残しを先に入れ、残りを優先度の高い最大4教科に比例配分 */
+  function plan(day, subjects, carryOver = [], usedMinutes = 0, factor = 1) {
+    const breakdown = availableTime(day);
+    let remaining = Math.max(0, adjustedMinutes(breakdown.study, factor) - usedMinutes);
+    const tasks = [], leftover = [];
+    carryOver.forEach(item => {
+      const fit = Math.floor(Math.min(item.minutes, remaining) / 5) * 5;
+      if (fit >= MIN_TASK || (fit > 0 && fit === item.minutes)) {
+        tasks.push({ subject: item.subject, minutes: fit, content: item.content, reason: `前の日のやり残し(${item.minutes}分)を先に片付ける`, isCarryOver: true });
+        remaining -= fit;
+        if (item.minutes > fit) leftover.push({ subject: item.subject, minutes: item.minutes - fit, content: item.content });
+      } else leftover.push(item);
+    });
+    const classes = day.classesToday || new Set();
+    const ranked = subjects.map(s => [s, priority(s, classes.has(s.name))]).sort((a, b) => b[1] - a[1]);
+    const minutes = allocate(remaining, ranked.map(r => r[1]));
+    ranked.forEach(([s], rank) => {
+      if (minutes[rank] > 0) tasks.push({ subject: s.name, minutes: minutes[rank], content: content(s), reason: reason(s, rank + 1, classes.has(s.name)), isCarryOver: false });
+    });
+    return { breakdown, tasks, leftover };
+  }
+
+  /** やり残しを、これからの日に入るだけ順に配る */
+  function redistribute(items, capacities) {
+    const perDay = capacities.map(() => []);
+    const free = capacities.slice();
+    const unplaced = [];
+    items.forEach(original => {
+      const item = { ...original };
+      perDay.forEach((list, day) => {
+        if (item.minutes <= 0) return;
+        const fit = Math.floor(Math.min(item.minutes, free[day]) / 5) * 5;
+        if (!(fit >= MIN_TASK || (fit > 0 && fit === item.minutes))) return;
+        list.push({ subject: item.subject, minutes: fit, content: item.content });
+        free[day] -= fit;
+        item.minutes -= fit;
+      });
+      if (item.minutes > 0) unplaced.push(item);
+    });
+    return { perDay, unplaced };
+  }
+
+  // ---- モード(StudyMode.swift)----
+
+  const EXAM_WINDOW = 14;
+  const covers = (e, subject) => !e.subjects.length || e.subjects.includes(subject);
+  const inExamWindow = (day, e) => addDays(e.start, -EXAM_WINDOW) <= day && day <= e.end;
+
+  /** モード:行事の日 → 軽め、考査の14日前〜最終日 → 考査、それ以外 → 通常 */
+  function modeOn(day, events) {
+    if (events.some(e => !e.isExam && e.start <= day && day <= e.end)) return '軽め';
+    if (events.some(e => e.isExam && inExamWindow(day, e))) return '考査';
+    return '通常';
+  }
+
+  /** 重み:軽め0.5、通常1.0、考査は考査に出る教科1.5・出ない教科0.5 */
+  function weight(subject, day, events) {
+    const mode = modeOn(day, events);
+    if (mode === '軽め') return 0.5;
+    if (mode === '通常') return 1;
+    return events.some(e => e.isExam && covers(e, subject) && inExamWindow(day, e)) ? 1.5 : 0.5;
+  }
+
+  /** その日に考査期間の教科(全教科の考査があれば null) */
+  function examSubjects(day, events) {
+    const active = events.filter(e => e.isExam && inExamWindow(day, e));
+    if (active.some(e => !e.subjects.length)) return null;
+    return new Set(active.flatMap(e => e.subjects));
+  }
+
+  // ---- 逆算ノルマ(Quota.swift)----
+
+  /** 締め切り:自分で決めた日(過ぎていたら今日+6日)→ 次の考査の前日 → 今日+29日 */
+  function deadline(m, today, events) {
+    if (m.deadline) return m.deadline >= today ? m.deadline : addDays(today, 6);
+    const next = events.filter(e => e.isExam && covers(e, m.subject) && e.end >= today).sort((a, b) => a.start.localeCompare(b.start))[0];
+    if (next) { const before = addDays(next.start, -1); return before > today ? before : today; }
+    return addDays(today, 29);
+  }
+
+  /** 今日のノルマ = 切り上げ(残り × 今日の重み ÷ 今日〜締め切りの重みの合計) */
+  function quota(remaining, today, due, weightOf) {
+    if (remaining <= 0) return 0;
+    const w = weightOf(today);
+    if (w <= 0) return 0;
+    let total = 0;
+    for (let d = today; d <= due; d = addDays(d, 1)) total += weightOf(d);
+    if (total <= 0) return remaining;
+    return Math.min(remaining, Math.ceil(remaining * w / total));
+  }
+
+  /** その問題番号が入っているルートの区切り */
+  const stepFor = (problem, route) => (route || []).find(s => s.from <= problem && problem <= s.to) || null;
+
+  /** 教材ごとの今日のノルマ(苦手分野 → 考査に出る教科 → ノルマの多い順) */
+  function planQuota(materials, today, events, weakFields) {
+    const exam = examSubjects(today, events);
+    const isExamDay = modeOn(today, events) === '考査';
+    const list = [];
+    materials.forEach(m => {
+      const due = deadline(m, today, events);
+      const remaining = Math.max(0, m.total - m.done);
+      const q = quota(remaining, today, due, d => weight(m.subject, d, events));
+      if (q <= 0) return;
+      const from = m.done + 1;
+      const step = stepFor(from, m.route);
+      const field = step ? step.field : null;
+      const weak = !!(field && weakFields[m.subject] && weakFields[m.subject].has(field));
+      list.push({ materialID: m.id, subject: m.subject, quota: q, from, to: m.done + q, field, isWeakField: weak, deadline: due });
+    });
+    const rank = (q) => q.isWeakField ? 0 : (isExamDay && (exam === null || exam.has(q.subject)) ? 1 : 2);
+    return list.sort((a, b) => rank(a) - rank(b) || b.quota - a.quota);
+  }
+
+  // ---- 解き直し(ReviewQueue.swift)----
+
+  const AFTER = { '○': null, '△': 3, '×': 1 };
+
+  /** 問題ごとのいちばん新しい記録 */
+  function latest(attempts) {
+    const map = new Map();
+    attempts.forEach(a => {
+      const key = `${a.material}#${a.no}`;
+      const old = map.get(key);
+      if (old && (old.date > a.date || (old.date === a.date && (old.at || 0) > (a.at || 0)))) return;
+      map.set(key, a);
+    });
+    return map;
+  }
+
+  /** 今日までに解き直す問題(×は翌日、△は3日後) */
+  function reviewDue(attempts, today) {
+    const list = [];
+    latest(attempts).forEach(a => {
+      const after = AFTER[a.mark];
+      if (after == null) return;
+      const due = addDays(a.date, after);
+      if (due <= today) list.push({ material: a.material, no: a.no, lastMark: a.mark, lastDate: a.date, due });
+    });
+    return list.sort((a, b) => a.due.localeCompare(b.due) || (a.lastMark === '×' ? 0 : 1) - (b.lastMark === '×' ? 0 : 1) || a.no - b.no);
+  }
+
+  /** 今日のキュー(今日より前の記録で決まる) */
+  const todaysQueue = (attempts, today) => reviewDue(attempts.filter(a => a.date < today), today);
+
+  /** 今日のキューのうち、今日解き直した数 */
+  function reviewDoneToday(attempts, today) {
+    const todays = new Set(attempts.filter(a => a.date === today).map(a => `${a.material}#${a.no}`));
+    return todaysQueue(attempts, today).filter(r => todays.has(`${r.material}#${r.no}`)).length;
+  }
+
+  // ---- 苦手分野(WeakField.swift)----
+
+  const rateOf = (f) => f.max > 0 ? f.score / f.max * 100 : 0;
+
+  /** 苦手:得点率60%未満、または 教科の平均 − 10 以下 */
+  function weakIn(fields) {
+    const list = (fields || []).filter(f => f.max > 0);
+    const maxSum = list.reduce((s, f) => s + f.max, 0);
+    if (maxSum <= 0) return [];
+    const avg = list.reduce((s, f) => s + f.score, 0) / maxSum * 100;
+    return list.filter(f => rateOf(f) < 60 || rateOf(f) <= avg - 10).sort((a, b) => rateOf(a) - rateOf(b));
+  }
+
+  /** 教科ごとの苦手分野(教科ごとに、分野別がある最新の結果) scores: [{date, subject, fields}] */
+  function weakFields(scores) {
+    const latestBy = {};
+    scores.filter(s => s.fields && s.fields.length).forEach(s => {
+      if (latestBy[s.subject] && latestBy[s.subject].date >= s.date) return;
+      latestBy[s.subject] = s;
+    });
+    const result = {};
+    Object.keys(latestBy).forEach(subject => {
+      const names = weakIn(latestBy[subject].fields).map(f => f.name);
+      if (names.length) result[subject] = new Set(names);
+    });
+    return result;
+  }
+
+  // ---- ストリーク(Streak.swift)----
+
+  const TICKET_EVERY = 7, MAX_TICKETS = 2;
+
+  /** 達成:やった数 × 5 ≧ ノルマ × 4(80%以上) */
+  const isAchieved = (quota, done) => quota > 0 && done * 5 >= quota * 4;
+
+  /**
+   * ストリーク:最初の記録の日から今日まで1日ずつ
+   * ノルマ0 → 数えない / 達成 → +1(7の倍数でチケット+1、最大2)/ 未達成 → チケットがあれば自動で使う、なければ0
+   * 今日はまだ途中なら途切れさせない
+   */
+  function streak(days, today, useTickets = true, protectedDays = new Set()) {
+    const byDay = {};
+    days.forEach(d => { byDay[d.date] = d; });
+    const keys = Object.keys(byDay).sort();
+    if (!keys.length || keys[0] > today) return { current: 0, longest: 0, tickets: 0, status: {} };
+    let current = 0, longest = 0, tickets = 0;
+    const status = {};
+    for (let day = keys[0]; day <= today; day = addDays(day, 1)) {
+      const r = byDay[day];
+      if (r && r.quota <= 0) status[day] = 'skipped';
+      else if (r && isAchieved(r.quota, r.done)) {
+        current++; longest = Math.max(longest, current); status[day] = 'achieved';
+        if (useTickets && current % TICKET_EVERY === 0) tickets = Math.min(MAX_TICKETS, tickets + 1);
+      } else if (day === today) status[day] = 'inProgress';
+      else if (useTickets && tickets > 0) { tickets--; status[day] = 'ticket'; }
+      else if (!useTickets && protectedDays.has(day)) status[day] = 'ticket';
+      else { current = 0; status[day] = 'missed'; }
+    }
+    return { current, longest, tickets, status };
+  }
+
+  const Engine = {
+    toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
+    ability, weakness, urgency, priority, allocate, content, reason, plan, redistribute,
+    modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota,
+    latest, reviewDue, todaysQueue, reviewDoneToday, weakIn, weakFields, isAchieved, streak,
+    MAX_TICKETS,
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
+  else root.Engine = Engine;
+})(typeof window !== 'undefined' ? window : globalThis);
