@@ -377,7 +377,111 @@
     return { current, longest, tickets, status };
   }
 
+  // ---- 毎日のノルマを自動で選ぶ(Schedule.swift と同じ決まり)----
+
+  const OTHER_EVERY = 2;
+  const WEEKEND_PICKS = [['数学', 3], ['英語', 2], ['物理', 1], ['化学', 1]];
+
+  /** 日の番号(2000年1月1日から何日目か) */
+  const dayIndex = (key) => daysBetween('2000-01-01', key);
+
+  /** 枠が、その日より前の平日に何回出たか(2000-01-01 は土曜なので曜日 = (k+6)%7、0=日 6=土)。N と 7 の最小公倍数で1周 */
+  function weekdayOccurrences(index, shift, every) {
+    if (index <= 0 || every <= 0) return 0;
+    const hit = (k) => { const w = (k + 6) % 7; return w !== 0 && w !== 6 && (k + shift) % every === 0; };
+    const gcd = (a, b) => b ? gcd(b, a % b) : a;
+    const cycle = every * 7 / gcd(every, 7);
+    let per = 0; for (let k = 0; k < cycle; k++) if (hit(k)) per++;
+    const full = Math.floor(index / cycle);
+    let n = full * per;
+    for (let k = full * cycle; k < index; k++) if (hit(k)) n++;
+    return n;
+  }
+
+  /** その日に使える教材か(期間・役割・モード) */
+  function schedActive(item, day, events) {
+    if (item.activeFrom && item.activeFrom > day) return false;
+    if (item.activeUntil && item.activeUntil < day) return false;
+    if (item.role === '後回し') return false;
+    if (item.role === '考査用') {
+      if (modeOn(day, events) !== '考査') return false;
+      const subs = examSubjects(day, events);
+      return subs === null || subs.has(item.subject);
+    }
+    return true;
+  }
+
+  /** 自動で選ぶときの点 = 教科の優先度 × (1 + 前回からの日数 ÷ 7)。一度もやっていなければ30日 */
+  function schedScore(item, day, priority) {
+    const since = item.lastDone ? Math.max(0, daysBetween(item.lastDone, day)) : 30;
+    return (priority[item.subject] ?? 1) * (1 + since / 7);
+  }
+
+  /**
+   * その日のノルマ(平日:毎日・N日に1回・グループは交互・「その他」。土日:毎日 + 数学3・英語2・物理1・化学1)
+   * 行事の日(軽め)は量を半分(切り上げ)
+   */
+  function schedule(items, day, events, priority = {}) {
+    const mode = modeOn(day, events);
+    const byOrder = (a, b) => (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const active = items.filter(i => schedActive(i, day, events)).sort(byOrder);
+    const result = [], chosen = new Set();
+    const add = (item, reason) => {
+      if (chosen.has(item.id)) return;
+      chosen.add(item.id);
+      result.push({ id: item.id, amount: mode === '軽め' ? Math.floor((item.amount + 1) / 2) : item.amount, unit: item.unit,
+        reason: mode === '軽め' ? reason + '(行事の日なので半分)' : reason });
+    };
+    const isDaily = (i) => i.everyDays === 1 && !i.group;
+    active.filter(isDaily).forEach(i => add(i, '毎日'));
+    const wd = weekdayOf(day);
+    if (wd === 1 || wd === 7) {
+      const cands = active.filter(i => !isDaily(i));
+      WEEKEND_PICKS.forEach(([subject, count]) => {
+        cands.filter(i => i.subject === subject && !chosen.has(i.id))
+          .sort((a, b) => (schedScore(b, day, priority) - schedScore(a, day, priority)) || byOrder(a, b)).slice(0, count)
+          .forEach(i => add(i, `土日:${subject}を重点に、前回からの日数で選んだ`));
+      });
+      return result;
+    }
+    const slots = [];
+    const sorted = items.slice().sort(byOrder);
+    const groups = {};
+    sorted.filter(i => i.group).forEach(i => { (groups[i.group] = groups[i.group] || []).push(i); });
+    sorted.filter(i => !i.group && i.everyDays >= 2).forEach(i => slots.push({ every: i.everyDays, members: [i], label: `${i.everyDays}日に1回` }));
+    Object.keys(groups).sort().forEach(name => {
+      const ev = groups[name].map(i => i.everyDays).filter(n => n > 0);
+      const every = Math.max(1, ev.length ? Math.min(...ev) : 2);
+      slots.push({ every, members: groups[name], label: `${name}(交互・${every}日に1回)` });
+    });
+    slots.push({ every: OTHER_EVERY, members: [], label: 'その他', other: true });
+    const index = dayIndex(day), rank = {}, activeIDs = new Set(active.map(i => i.id));
+    // 同じ N の枠を順にずらす(安定した並べ替え:N の小さい順、同じ N は上の順のまま)
+    slots.map((s, k) => [s, k]).sort((a, b) => a[0].every - b[0].every || a[1] - b[1]).forEach(([slot]) => {
+      const r = rank[slot.every] || 0;
+      rank[slot.every] = r + 1;
+      const shifted = index + r % slot.every;
+      if (shifted % slot.every !== 0) return;
+      if (slot.other) {
+        const pool = active.filter(i => i.everyDays === 0 && !i.group && !chosen.has(i.id));
+        if (pool.length) {
+          const best = pool.reduce((a, b) => schedScore(b, day, priority) > schedScore(a, day, priority) ? b : a);
+          add(best, 'その他:教科の優先度と、前回からの日数で選んだ');
+        }
+      } else if (slot.members.length === 1) {
+        if (activeIDs.has(slot.members[0].id)) add(slot.members[0], slot.label);
+      } else {
+        const members = slot.members.filter(i => activeIDs.has(i.id));
+        if (!members.length) return;
+        const turn = weekdayOccurrences(index, r % slot.every, slot.every);
+        add(members[turn % members.length], slot.label);
+      }
+    });
+    return result;
+  }
+
   const Engine = {
+    dayIndex, weekdayOccurrences, schedActive, schedScore, schedule,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
     ability, weakness, urgency, priority, allocate, content, reason, plan, redistribute,
     modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota, isActive,

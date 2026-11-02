@@ -125,12 +125,16 @@
     /** 今日の記録を作る(あれば、あとから増えた教材のノルマだけ足す)。ノルマは1日の最初に決めて変えない */
     ensureDayLog(key) {
       const events = L.modeEvents();
-      const plan = E.planQuota(L.materialPlans(), key, events, L.weakFields());
       let log = S.get('dayLogs', key);
+      const isNew = !log;
       if (!log) log = { id: key, date: key, mode: E.modeOn(key, events), entries: [], reviewQuota: E.todaysQueue(S.all('attempts'), key).length };
+      // 前のしくみ(問題数のノルマ)で作った今日の記録は、作り直す(まだ何もしていなければ)
+      const old = log.entries.some(e => !e.unit && !e.reason) && log.entries.every(e => !e.done);
+      if (old) log.entries = [];
       const known = new Set(log.entries.map(e => e.material));
-      const added = plan.filter(q => !known.has(q.materialID)).map(q => ({ material: q.materialID, quota: q.quota, done: 0, from: q.from }));
-      if (added.length || !S.get('dayLogs', key)) {
+      const added = L.schedule(key).filter(q => !known.has(q.id))
+        .map(q => ({ material: q.id, quota: 1, done: 0, from: 1, amount: q.amount, unit: q.unit, reason: q.reason }));
+      if (added.length || isNew || old) {
         log.entries = log.entries.concat(added);
         S.put('dayLogs', key, log);
         S.save();
@@ -138,19 +142,39 @@
       return S.get('dayLogs', key);
     },
 
-    /** 今日の教材(苦手分野 → 考査に出る教科 → ノルマの多い順) */
+    /** 教材ごとの、最後にやった日(1日の記録のチェックから) */
+    lastDoneDates() {
+      const r = {};
+      S.all('dayLogs').forEach(log => log.entries.forEach(e => { if (e.done > 0 && (!r[e.material] || r[e.material] < log.date)) r[e.material] = log.date; }));
+      return r;
+    },
+
+    /** その日のノルマ(Scheduler と同じ決まり。まだ保存しない) */
+    schedule(key) {
+      const last = L.lastDoneDates();
+      const items = L.materials().map(m => ({ id: m.id, subject: m.subject, name: m.name, role: m.role || 'メイン',
+        everyDays: m.every ?? 0, group: m.group || '', amount: m.amount || 0, unit: m.unit || 'ページ',
+        activeFrom: m.activeFrom || null, activeUntil: m.activeUntil || null, order: (m.routeOrder || 0) * 1000 + (m.order || 0),
+        lastDone: last[m.id] || null }));
+      const priority = {};
+      L.subjectStates(key).forEach(s => { priority[s.name] = E.priority(s, false); });
+      return E.schedule(items, key, L.modeEvents(), priority);
+    },
+
+    /** 今日の教材(選ばれた順) */
     todayMaterials(log) {
       const mats = Object.fromEntries(L.materials().map(m => [m.id, m]));
-      const weak = L.weakFields();
-      const exam = log.mode === '考査' ? E.examSubjects(log.date, L.modeEvents()) : new Set();
-      const items = log.entries.filter(e => mats[e.material]).map(e => {
-        const m = mats[e.material];
-        const step = E.stepFor(e.from, m.route);
-        const field = step ? step.field : null;
-        return { m, e, field, weak: !!(field && weak[m.subject] && weak[m.subject].has(field)) };
-      });
-      const rank = (i) => i.weak ? 0 : (log.mode === '考査' && (exam === null || exam.has(i.m.subject)) ? 1 : 2);
-      return items.sort((a, b) => rank(a) - rank(b) || b.e.quota - a.e.quota);
+      return log.entries.filter(e => mats[e.material]).map(e => ({ m: mats[e.material], e }));
+    },
+
+    /** 今日のその教材を「やった」にする/戻す */
+    toggleDone(materialID, key) {
+      const log = L.ensureDayLog(key);
+      const e = log.entries.find(x => x.material === materialID);
+      if (!e) return;
+      e.done = e.done > 0 ? 0 : e.quota;
+      S.put('dayLogs', key, log);
+      S.save();
     },
 
     /** 今日の解き直しキュー(まだのもの・苦手分野を先に) */
@@ -258,9 +282,29 @@
           routeOrder: Number.isInteger(item.route) ? item.route : null, total, done,
           daily: (old && old.daily) || role === '毎日',
         });
+        // 1日の量・出す日・交互のグループ・期間(書いてあるときだけ)
+        const m = S.get('materials', id);
+        if (Number.isInteger(item.amount)) m.amount = Math.max(0, item.amount);
+        if (typeof item.unit === 'string') m.unit = item.unit;
+        if (Number.isInteger(item.every)) { m.every = Math.max(0, item.every); m.daily = item.every === 1; }
+        if ('every' in item || 'group' in item) m.group = item.group || '';
+        if ('every' in item || 'from' in item) m.activeFrom = item.from || null;
+        if ('every' in item || 'until' in item) m.activeUntil = item.until || null;
+        S.put('materials', id, m);
         if (old) sum.updated++; else sum.added++;
       });
-      (json.events || []).forEach(item => {
+      (json.removeEvents || []).forEach(id => S.remove('events', id));
+      // 日付が決まっている予定(dates の日ごとに1件)
+      (json.events || []).filter(item => item.id && Array.isArray(item.dates)).forEach(item => {
+        item.dates.forEach(date => {
+          const id = `json-${item.id}-${date}`;
+          if (S.get('events', id)) return;
+          S.put('events', id, { title: item.name, kind: item.kind || L.eventKind(item.name) || '行事', date, hasTime: false,
+            start: 540, end: 900, subjects: [], periodFrom: null, periodTo: null });
+          sum.events++;
+        });
+      });
+      (json.events || []).filter(item => !item.dates).forEach(item => {
         const kind = L.eventKind(item.name || ''), when = L.parseWhen(item.when || '');
         if (!item.name || !kind || !when) return;
         const id = `json-ev-${item.name}-${item.when}`.replace(/\//g, '-');

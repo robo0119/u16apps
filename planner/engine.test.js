@@ -133,5 +133,40 @@ test('時間は優先度に比例して配られ、合計は使える時間を�
 });
 test('時程:5時間目 = 8:40 + 4×60 + 35 = 13:15', () => { eq(E.periodClock({}).start(5), hm(13, 15)); });
 
+// ---- 毎日のノルマを自動で選ぶ(SchedulerTests.swift と同じ例)----
+const it = (id, subject, every, o = {}) => ({ id, subject, name: id, role: o.role || 'メイン', everyDays: every, group: o.group || '', amount: 10, unit: 'ページ',
+  activeFrom: o.from || null, activeUntil: o.until || null, order: o.order || 0, lastDone: o.last || null });
+const weekdays = (from, to) => { const out = []; for (let k = from; k <= to; k++) { const w = E.weekdayOf(d(11, k)); if (w !== 1 && w !== 7) out.push(d(11, k)); } return out; };
+test('毎日の教材は毎日、2日に1回の2つは日を分けて交互に出る', () => {
+  const items = [it('daily', '英語', 1), it('a', '英語', 2, { order: 1 }), it('b', '英語', 2, { order: 2 })];
+  weekdays(2, 6).forEach(day => { const ids = E.schedule(items, day, []).map(q => q.id); eq(ids.includes('daily'), true); eq(ids.includes('a') !== ids.includes('b'), true); });
+});
+test('グループは1つの枠を交互に使う', () => {
+  const items = [it('polaris', '英語', 2, { group: '①', order: 1 }), it('ultimate', '英語', 2, { group: '①', order: 2 })];
+  const seen = weekdays(2, 13).flatMap(day => E.schedule(items, day, []).map(q => q.id));
+  eq(seen.includes('polaris') && seen.includes('ultimate'), true);
+  eq(seen.every((x, i) => i === 0 || x !== seen[i - 1]), true);
+});
+test('期間が終わった教材と、後回しは出ない', () => {
+  const items = [it('focus', '数学', 1, { until: d(11, 26) }), it('later', '英語', 1, { role: '後回し' })];
+  eq(E.schedule(items, d(11, 26), []).map(q => q.id), ['focus']); eq(E.schedule(items, d(11, 27), []).length, 0);
+});
+test('「その他」は、前回からの日数が長いものを選ぶ', () => {
+  const items = [it('recent', '英語', 0, { last: d(11, 1) }), it('old', '英語', 0, { last: d(10, 1) })];
+  eq(weekdays(2, 6).flatMap(day => E.schedule(items, day, [])).map(q => q.id)[0], 'old');
+});
+test('土日は、毎日の教材に加えて数学3・英語2・物理1・化学1', () => {
+  const items = [it('daily', '英語', 1)];
+  for (let i = 0; i < 4; i++) items.push(it('m' + i, '数学', 2, { order: i }));
+  for (let i = 0; i < 3; i++) items.push(it('e' + i, '英語', 3, { order: i }));
+  items.push(it('p', '物理', 0), it('c', '化学', 0), it('j', '国語', 2));
+  const ids = E.schedule(items, d(11, 7), []).map(q => q.id);
+  eq([ids.includes('daily'), ids.filter(x => x[0] === 'm').length, ids.filter(x => x[0] === 'e').length, ids.includes('p'), ids.includes('c'), ids.includes('j')], [true, 3, 2, true, true, false]);
+});
+test('行事の日は量が半分', () => {
+  eq(E.schedule([it('daily', '英語', 1)], d(11, 4), [{ start: d(11, 4), end: d(11, 4), isExam: false, subjects: [] }])[0].amount, 5);
+});
+test('日の番号は Swift と同じ(2000-01-01 から)', () => { eq(E.dayIndex('2000-01-02'), 1); eq(E.dayIndex('2026-11-02'), 9802); });
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);
