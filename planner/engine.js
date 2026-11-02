@@ -398,10 +398,41 @@
     return n;
   }
 
-  /** その日に使える教材か(期間・役割・モード) */
+  // ---- 周回(Laps.swift と同じ)----
+
+  /** どれかの周の期間に入っているか(周回の予定がなければ true。終えた周は出さない) */
+  const lapInWindow = (laps, day) => !laps || !laps.length || laps.some(l => !l.done && l.start <= day && day <= l.end);
+
+  /** 今の周回の状態:遅れ → 途中 → まだ → 全部終えた */
+  function lapStatus(laps, day) {
+    if (!laps || !laps.length) return null;
+    const open = laps.filter(l => !l.done).sort((a, b) => a.lap - b.lap);
+    const late = open.find(l => l.end < day);
+    if (late) return { lap: late, state: 'late', days: daysBetween(late.end, day) };
+    const now = open.find(l => l.start <= day && day <= l.end);
+    if (now) {
+      const length = Math.max(1, daysBetween(now.start, now.end) + 1);
+      return { lap: now, state: 'running', days: daysBetween(day, now.end), progress: Math.min(1, daysBetween(now.start, day) / length) };
+    }
+    const next = open.find(l => l.start > day);
+    if (next) return { lap: next, state: 'upcoming', days: daysBetween(day, next.start) };
+    return { lap: null, state: 'finished' };
+  }
+
+  /** 表示用の1行(例:「1周目 あと12日」) */
+  function lapLabel(s) {
+    const lap = s.lap ? `${s.lap.lap}周目` : '';
+    if (s.state === 'upcoming') return `${lap}まで あと${s.days}日`;
+    if (s.state === 'running') return s.days === 0 ? `${lap} 今日まで` : `${lap} あと${s.days}日`;
+    if (s.state === 'late') return `${lap} ${s.days}日遅れ`;
+    return '全部の周を終えた';
+  }
+
+  /** その日に使える教材か(期間・役割・モード・周回) */
   function schedActive(item, day, events) {
     if (item.activeFrom && item.activeFrom > day) return false;
     if (item.activeUntil && item.activeUntil < day) return false;
+    if (!lapInWindow(item.laps, day)) return false;
     if (item.role === '後回し') return false;
     if (item.role === '考査用') {
       if (modeOn(day, events) !== '考査') return false;
@@ -481,7 +512,7 @@
   }
 
   const Engine = {
-    dayIndex, weekdayOccurrences, schedActive, schedScore, schedule,
+    dayIndex, weekdayOccurrences, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
     ability, weakness, urgency, priority, allocate, content, reason, plan, redistribute,
     modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota, isActive,

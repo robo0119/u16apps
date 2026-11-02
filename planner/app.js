@@ -125,7 +125,47 @@
     return `<label class="task ${done ? 'done' : ''}" style="margin:0;color:var(--text)">
       <input type="checkbox" data-act="quota" data-m="${i.m.id}" ${done ? 'checked' : ''}>
       <div style="flex:1"><div>${tag(i.m.subject)} <b class="c">${esc(i.m.name)}</b>${i.e.amount > 0 ? ` <b>${i.e.amount}${esc(i.e.unit)}</b>` : ''}</div>
-      <div class="reason">💡 ${esc(i.e.reason || '')}</div>${i.m.note ? `<div class="reason">${esc(i.m.note)}</div>` : ''}</div></label>`;
+      <div class="reason">💡 ${esc(i.e.reason || '')} ${lapBadge(i.m)}</div>${i.m.note ? `<div class="reason">${esc(i.m.note)}</div>` : ''}</div></label>`;
+  }
+
+  /** 周回の状態の小さなラベル(遅れは赤、途中は青、まだは灰) */
+  function lapBadge(m) {
+    const st = E.lapStatus(m.laps, today());
+    if (!st) return '';
+    return `<span class="lapb lapb-${st.state}">${esc(E.lapLabel(st))}</span>`;
+  }
+
+  /** 周回のロードマップ:教材ごとに、何周目をいつからいつまでに、を横棒で */
+  function roadmapHTML() {
+    const key = today();
+    const months = state.rmRange ?? 6;
+    const allEnd = L.materials().flatMap(m => (m.laps || []).map(l => l.end)).sort().pop() || key;
+    let end = key;
+    if (months) { const d = E.toDate(key); d.setMonth(d.getMonth() + months); end = E.keyOf(d); } else end = allEnd;
+    const span = Math.max(1, E.daysBetween(key, end));
+    const pos = (k) => Math.max(0, Math.min(100, E.daysBetween(key, k) / span * 100));
+    const order = L.subjects().map(x => x.name).concat(['全部']);
+    const mats = L.materials().filter(m => (m.laps || []).some(l => l.end >= key && l.start <= end))
+      .sort((a, b) => ((order.indexOf(a.subject) + 99) % 199 - (order.indexOf(b.subject) + 99) % 199) || ((a.routeOrder ?? 99) - (b.routeOrder ?? 99)) || ((a.order || 0) - (b.order || 0)));
+    // 月の目盛り
+    let ticks = '';
+    const t = E.toDate(key); t.setDate(1); t.setMonth(t.getMonth() + 1);
+    while (E.keyOf(t) <= end) { ticks += `<span class="rm-tick" style="left:${pos(E.keyOf(t))}%">${t.getMonth() + 1}月</span>`; t.setMonth(t.getMonth() + 1); }
+    const lines = S.all('events').filter(e => (e.kind === '定期テスト' || e.title.includes('英検')) && e.date >= key && e.date <= end)
+      .map(e => `<span class="rm-line" style="left:${pos(e.date)}%"></span>`).join('');
+    const rows = mats.map(m => `<div class="rm-row"><div class="rm-name">${esc(m.name)}</div><div class="rm-track">${lines}
+      ${(m.laps || []).filter(l => l.end >= key && l.start <= end).map(l => {
+        const a = pos(l.start < key ? key : l.start), b = pos(l.end > end ? end : l.end);
+        return `<span class="rm-bar" title="${l.lap}周目 ${md(l.start)}〜${md(l.end)} ${esc(l.scope || '')}" style="left:${a}%;width:${Math.max(1.5, b - a)}%;background:${color(m.subject)};opacity:${l.done ? 0.35 : 0.9}">${l.lap}</span>`;
+      }).join('')}</div></div>`).join('');
+    const current = L.materials().filter(m => (m.laps || []).length).map(m => ({ m, st: E.lapStatus(m.laps, key) }))
+      .sort((a, b) => ({ late: 0, running: 1, upcoming: 2, finished: 3 }[a.st.state] - { late: 0, running: 1, upcoming: 2, finished: 3 }[b.st.state]) || ((a.st.days || 0) - (b.st.days || 0)));
+    return `<div class="row" style="margin-bottom:12px"><button class="secondary" data-act="close-roadmap">‹ 教材</button><h2 style="margin:0;flex:1">ロードマップ</h2></div>
+      <div class="card"><div class="row">${[[3, '3か月'], [6, '半年'], [12, '1年'], [0, '全部']].map(([n, t]) => `<button class="${months === n ? '' : 'secondary'}" style="min-height:36px;padding:4px 14px" data-act="rm-range" data-n="${n}">${t}</button>`).join('')}</div>
+        <div class="rm-head">${ticks}</div>${rows || '<p class="muted">この期間の周回の予定はありません</p>'}
+        <p class="muted">棒の数字は何周目か。左はしが今日、オレンジの点線は定期テストと英検</p></div>
+      <div class="card"><h2>今の周回</h2>${current.map(x => `<div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)">
+        <span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color(x.m.subject)}"></i> ${esc(x.m.name)}</span>${lapBadge(x.m)}</div>`).join('')}</div>`;
   }
 
   /** ○△×を選ぶボタン */
@@ -137,6 +177,7 @@
 
   function renderMaterials() {
     if (state.form) return materialForm();
+    if (state.roadmap) return roadmapHTML();
     if (state.detail && S.get('materials', state.detail)) return materialDetail(S.get('materials', state.detail));
     const subjects = L.subjects();
     const mats = L.materials();
@@ -144,6 +185,13 @@
       <div class="row"><label class="button secondary" style="margin:0;color:var(--accent)">JSONから読み込む<input type="file" accept=".json,application/json" id="import-json" hidden></label>
       <button data-act="new-material">＋ 教材を追加</button></div></div>
       ${state.importMessage ? `<div class="notice">${esc(state.importMessage)}</div>` : ''}`;
+    const statuses = L.materials().map(m => E.lapStatus(m.laps, today())).filter(Boolean);
+    if (statuses.length) {
+      const late = statuses.filter(x => x.state === 'late').length;
+      const soon = statuses.filter(x => x.state === 'running' && x.days <= 7).length;
+      html += `<div class="card mrow" data-act="roadmap" style="margin-bottom:16px"><span class="rm-icon">▤</span>
+        <div class="grow"><b>周回のロードマップ</b><div class="muted ${late ? 'bad' : ''}">${late ? `遅れ ${late}冊・` : ''}今週終わる周 ${soon}・いつまでに何周かを見る</div></div><span class="muted">›</span></div>`;
+    }
     if (!mats.length) return html + '<div class="card"><p class="muted">問題集・単語帳などを追加しよう</p></div>';
     const order = subjects.map(s => s.name).concat(['全教科']);
     const groups = {};
@@ -154,7 +202,7 @@
       html += `<div class="card"><h2>${tag(sub)}</h2>${list.map(m => `
         <div class="mrow" data-act="open-material" data-id="${m.id}" style="${m.role === '後回し' || m.role === '補助' ? 'opacity:.7' : ''}">
           <span style="width:24px;text-align:center">${ROLE_ICON[m.role] || '★'}</span>
-          <div class="grow"><b>${m.routeOrder ? `<span class="muted">${m.routeOrder}</span> ` : ''}${esc(m.name)}</b>
+          <div class="grow"><b>${m.routeOrder ? `<span class="muted">${m.routeOrder}</span> ` : ''}${esc(m.name)}</b> ${lapBadge(m)}
             ${m.total > 0 ? `<div class="progress" style="margin:6px 0"><i style="width:${Math.min(100, m.done / m.total * 100)}%"></i></div>` : ''}
             <div class="muted">${[everyText(m.every ?? 0) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : '', m.role, m.kind, m.period].filter(Boolean).map(esc).join('・')}</div>
             ${m.note ? `<div class="muted" style="font-size:.85rem">${esc(m.note)}</div>` : ''}</div><span class="muted">›</span>
@@ -184,6 +232,12 @@
         ${m.note ? `<p class="muted" style="margin:8px 0 0">${esc(m.note)}</p>` : ''}
         <p style="margin:10px 0 0"><b>ノルマ:</b>${esc([everyText(m.every ?? 0) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : ''].filter(Boolean).join('・'))}
           ${m.activeFrom || m.activeUntil ? `<span class="muted">・期間 ${m.activeFrom ? md(m.activeFrom) : ''}〜${m.activeUntil ? md(m.activeUntil) : ''}</span>` : ''}</p></div>
+      ${(m.laps || []).length ? `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">周回</h2>${lapBadge(m)}</div>
+        ${m.laps.slice().sort((a, b) => a.lap - b.lap).map(l => `<div class="task" style="align-items:center">
+          <b style="width:24px;color:${l.done ? 'var(--ok)' : 'var(--accent)'}">${l.done ? '✓' : l.lap}</b>
+          <div style="flex:1"><b>${l.lap}周目</b> ${md(l.start)}〜${md(l.end)}<div class="reason">${esc(l.scope || '')}${l.done ? `・${md(l.done)}に終えた` : ''}</div></div>
+          <button class="secondary" style="min-height:34px;padding:4px 12px" data-act="lap-toggle" data-m="${m.id}" data-lap="${l.lap}">${l.done ? '戻す' : '終えた'}</button></div>`).join('')}
+        <p class="muted">周の期間の中だけ、今日のノルマに出ます。早く終わったら「終えた」を押すと、その周はもう出ません</p></div>` : ''}
       <div class="card"><h2>○△×の記録</h2>
         <div class="row"><input id="mark-no" type="number" min="1" placeholder="問題番号" style="width:130px">
           ${['○', '△', '×'].map(mk => `<button class="b-${mk}" data-act="mark-no" data-m="${m.id}" data-mark="${mk}">${mk}</button>`).join('')}</div>
@@ -212,7 +266,12 @@
         <div><label>始める日(任意)</label><input id="mf-from" type="date" value="${f.activeFrom || ''}"></div>
         <div><label>終わる日(任意)</label><input id="mf-until" type="date" value="${f.activeUntil || ''}"></div>
       </div>
-      <p class="muted">${esc(ROLE_NOTE[f.role] || '')}。同じグループ名の教材は1つの枠を交互に使います。「自動」は、2日に1回の「その他」と土日に、教科の優先度と前回からの日数で選びます</p>
+      <h2 style="margin-top:16px">周回(いつまでに何周)</h2>
+      <div id="mf-laps">${(f.laps || []).map((l, i) => `<div class="route-row" style="grid-template-columns:auto 1fr 1fr 1.4fr auto;align-items:center">
+        <b>${i + 1}周目</b><input type="date" data-l="${i}" data-k="start" value="${l.start}"><input type="date" data-l="${i}" data-k="end" value="${l.end}">
+        <input data-l="${i}" data-k="scope" value="${esc(l.scope || '')}" placeholder="どこまで(全部・×だけ)"><button class="danger" data-act="lap-del" data-i="${i}">×</button></div>`).join('')}</div>
+      <button class="secondary" data-act="lap-add">＋ 周を追加</button>
+      <p class="muted">${esc(ROLE_NOTE[f.role] || '')}。周回を決めると、周の期間の中だけノルマに出ます。同じグループ名の教材は1つの枠を交互に使います。「自動」は、2日に1回の「その他」と土日に、教科の優先度と前回からの日数で選びます</p>
       <div class="row" style="margin-top:16px"><button data-act="save-material">保存</button><button class="secondary" data-act="cancel-material">やめる</button></div>
     </div>`;
   }
@@ -223,6 +282,7 @@
     f.subject = $('mf-subject').value.trim(); f.name = $('mf-name').value.trim(); f.role = $('mf-role').value;
     f.amount = Math.max(0, Number($('mf-amount').value) || 0); f.unit = $('mf-unit').value; f.every = Number($('mf-every').value);
     f.group = $('mf-group').value.trim(); f.activeFrom = $('mf-from').value || null; f.activeUntil = $('mf-until').value || null;
+    document.querySelectorAll('#mf-laps [data-l]').forEach(inp => { f.laps[Number(inp.dataset.l)][inp.dataset.k] = inp.value; });
     f.kind = $('mf-kind').value; f.period = $('mf-period').value.trim(); f.note = $('mf-note').value.trim();
   }
 
@@ -425,10 +485,30 @@
     'close-detail'() { state.detail = null; state.chip = null; render(); },
     'new-material'() {
       state.form = { id: null, subject: (L.subjects()[0] || {}).name || '', name: '', role: 'メイン', kind: '問題集', period: '', note: '',
-        amount: 0, unit: 'ページ', every: 2, group: '', activeFrom: null, activeUntil: null };
+        amount: 0, unit: 'ページ', every: 2, group: '', activeFrom: null, activeUntil: null, laps: [] };
       render();
     },
-    'edit-material'(el) { const m = S.get('materials', el.dataset.id); state.form = { ...m, route: (m.route || []).map(s => ({ ...s })) }; render(); },
+    'edit-material'(el) { const m = S.get('materials', el.dataset.id); state.form = { ...m, laps: (m.laps || []).map(l => ({ ...l })) }; render(); },
+    roadmap() { state.roadmap = true; render(); window.scrollTo(0, 0); },
+    'close-roadmap'() { state.roadmap = false; render(); },
+    'rm-range'(el) { state.rmRange = Number(el.dataset.n); render(); },
+    'lap-toggle'(el) {
+      const m = S.get('materials', el.dataset.m);
+      const lap = (m.laps || []).find(l => l.lap === Number(el.dataset.lap));
+      if (!lap) return;
+      lap.done = lap.done ? null : today();
+      S.put('materials', m.id, m); commit();
+    },
+    'lap-add'() {
+      readMaterialForm();
+      const f = state.form; f.laps = f.laps || [];
+      const last = f.laps[f.laps.length - 1];
+      const start = last && last.end ? E.addDays(last.end, 1) : today();
+      const d = E.toDate(start); d.setMonth(d.getMonth() + 1);
+      f.laps.push({ lap: f.laps.length + 1, start, end: E.keyOf(d), scope: f.laps.length ? '×だけ' : '全部', done: null });
+      render();
+    },
+    'lap-del'(el) { readMaterialForm(); state.form.laps.splice(Number(el.dataset.i), 1); render(); },
     'delete-material'(el) {
       if (!confirm('この教材と、その○△×の記録を消しますか?')) return;
       S.all('attempts').filter(a => a.material === el.dataset.id).forEach(a => S.remove('attempts', a.id));
@@ -460,6 +540,7 @@
         subject: f.subject, name: f.name, role: f.role, kind: f.kind, period: f.period, note: f.note,
         routeOrder: old ? (old.routeOrder ?? null) : null, amount: f.amount, unit: f.unit, every: f.every, group: f.group,
         activeFrom: f.activeFrom, activeUntil: f.activeUntil, daily: f.every === 1,
+        laps: (f.laps || []).filter(l => l.start && l.end).map((l, i) => ({ lap: i + 1, start: l.start, end: l.end < l.start ? l.start : l.end, scope: l.scope || '', done: l.done || null })),
         order: old ? old.order : L.materials().reduce((m, x) => Math.max(m, x.order || 0), -1) + 1 });
       state.form = null; state.detail = id;
       L.ensureDayLog(today());

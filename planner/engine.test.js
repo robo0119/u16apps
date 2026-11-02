@@ -168,5 +168,19 @@ test('行事の日は量が半分', () => {
 });
 test('日の番号は Swift と同じ(2000-01-01 から)', () => { eq(E.dayIndex('2000-01-02'), 1); eq(E.dayIndex('2026-11-02'), 9802); });
 
+// ---- 周回(LapTests.swift と同じ例)----
+const laps = [{ lap: 1, start: '2026-11-02', end: '2026-12-23', scope: '全部', done: null }, { lap: 2, start: '2027-01-08', end: '2027-02-28', scope: '×だけ', done: null }];
+test('周の期間の中だけノルマに出る', () => {
+  eq([E.lapInWindow(laps, '2026-12-01'), E.lapInWindow(laps, '2026-12-30'), E.lapInWindow([], '2026-12-30')], [true, false, true]);
+  eq(E.lapInWindow([{ ...laps[0], done: '2026-12-10' }, laps[1]], '2026-12-15'), false);
+});
+test('状態:途中・遅れ・次の周・全部終えた', () => {
+  eq(E.lapLabel(E.lapStatus(laps, '2026-12-13')), '1周目 あと10日');
+  eq(E.lapLabel(E.lapStatus(laps, '2026-12-26')), '1周目 3日遅れ');
+  const done = [{ ...laps[0], done: '2026-12-20' }, laps[1]];
+  eq(E.lapLabel(E.lapStatus(done, '2026-12-26')), '2周目まで あと13日');
+  eq(E.lapStatus([done[0], { ...laps[1], done: '2027-02-01' }], '2027-03-01').state, 'finished');
+});
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);

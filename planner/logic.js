@@ -155,7 +155,7 @@
       const items = L.materials().map(m => ({ id: m.id, subject: m.subject, name: m.name, role: m.role || 'メイン',
         everyDays: m.every ?? 0, group: m.group || '', amount: m.amount || 0, unit: m.unit || 'ページ',
         activeFrom: m.activeFrom || null, activeUntil: m.activeUntil || null, order: (m.routeOrder || 0) * 1000 + (m.order || 0),
-        lastDone: last[m.id] || null }));
+        lastDone: last[m.id] || null, laps: m.laps || [] }));
       const priority = {};
       L.subjectStates(key).forEach(s => { priority[s.name] = E.priority(s, false); });
       return E.schedule(items, key, L.modeEvents(), priority);
@@ -290,6 +290,11 @@
         if ('every' in item || 'group' in item) m.group = item.group || '';
         if ('every' in item || 'from' in item) m.activeFrom = item.from || null;
         if ('every' in item || 'until' in item) m.activeUntil = item.until || null;
+        // 周回の予定(書いてあれば置きかえる。同じ周をもう終えていたら、終えた日は残す)
+        if (Array.isArray(item.laps)) {
+          const done = Object.fromEntries((m.laps || []).filter(l => l.done).map(l => [l.lap, l.done]));
+          m.laps = item.laps.filter(l => l.start && l.end).map(l => ({ lap: l.lap, start: l.start, end: l.end, scope: l.scope || '', done: done[l.lap] || null }));
+        }
         S.put('materials', id, m);
         if (old) sum.updated++; else sum.added++;
       });
@@ -316,7 +321,6 @@
       if (json.profile) {
         const p = json.profile, lines = [];
         if (p.grade) lines.push(`学年:${p.grade}`);
-        if (p.goal) lines.push(`目標:${p.goal}`);
         if (p.strong && p.strong.length) lines.push(`得意:${p.strong.join('、')}`);
         if (p.weak && p.weak.length) lines.push(`苦手:${p.weak.join('、')}`);
         if (p.english) lines.push(`英語:${p.english}`);

@@ -66,6 +66,19 @@
     .route-row { display: grid; grid-template-columns: 1.4fr .7fr .7fr 1.2fr auto; gap: 6px; margin-bottom: 6px; }
     .notice { background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; }
     .sync-dot { font-size: .8rem; opacity: .9; }
+    /* 周回 */
+    .lapb { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; vertical-align: middle; }
+    .lapb-running { background: color-mix(in srgb, #3478f6 14%, transparent); color: #3478f6; }
+    .lapb-late { background: color-mix(in srgb, var(--ng) 14%, transparent); color: var(--ng); }
+    .lapb-upcoming, .lapb-finished { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+    .rm-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+    .rm-head { position: relative; height: 22px; margin: 14px 0 4px; font-size: .75rem; color: var(--muted); }
+    .rm-tick { position: absolute; transform: translateX(-2px); border-left: 1px solid var(--line); padding-left: 3px; }
+    .rm-row { margin: 6px 0 10px; }
+    .rm-name { font-size: .8rem; color: var(--muted); margin-bottom: 2px; }
+    .rm-track { position: relative; height: 18px; background: color-mix(in srgb, var(--line) 50%, transparent); border-radius: 5px; border-left: 2px solid var(--ng); }
+    .rm-bar { position: absolute; top: 0; height: 18px; border-radius: 5px; color: #fff; font-size: .7rem; font-weight: 800; padding-left: 5px; line-height: 18px; overflow: hidden; }
+    .rm-line { position: absolute; top: -3px; bottom: -3px; border-left: 1px dashed color-mix(in srgb, orange 60%, transparent); }
     @media (max-width: 520px) { .route-row { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
