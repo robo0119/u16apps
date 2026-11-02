@@ -182,5 +182,26 @@ test('状態:途中・遅れ・次の周・全部終えた', () => {
   eq(E.lapStatus([done[0], { ...laps[1], done: '2027-02-01' }], '2027-03-01').state, 'finished');
 });
 
+// ---- 単元の順に回す・長期休み(PipelineTests.swift と同じ例)----
+const UNITS = ['物質の構成', '原子の構造', '化学結合', '物質量'];
+const books = (a, b, c) => [['shin', '新標準', a, 1], ['lead', 'リードα', b, 2], ['excel', 'エクセル', c, 3]].map(([id, name, done, order]) =>
+  ({ id, subject: '化学', name, role: 'メイン', everyDays: 2, group: '化学ルート', amount: 0, unit: 'ページ', order, pipeline: true, units: UNITS, unitsDone: done }));
+test('最初は新標準で1つ目の単元', () => { const p = E.pipelinePick(books(0, 0, 0)); eq([p.item.id, p.unit], ['shin', 0]); });
+test('新標準が先に進み、リードαとエクセルが追いかける', () => {
+  let d = [0, 0, 0]; const log = [];
+  for (let k = 0; k < 9; k++) { const p = E.pipelinePick(books(...d)); log.push(p.item.id + p.unit); d[['shin', 'lead', 'excel'].indexOf(p.item.id)]++; if (d[1] > d[0] || d[2] > d[1]) throw new Error('追い越した'); }
+  eq(log.slice(0, 4), ['shin0', 'lead0', 'shin1', 'excel0']);
+});
+test('全部終えた教材は出ない', () => { const p = E.pipelinePick(books(4, 3, 3)); eq([p.item.id, p.unit], ['lead', 3]); eq(E.pipelinePick(books(4, 4, 4)), null); });
+test('長期休みは、数学4・英語2・国語1・物理1・化学1', () => {
+  const winter = [{ start: '2026-12-28', end: '2026-12-28', isExam: false, isVacation: true, subjects: [] }];
+  eq(E.modeOn('2026-12-28', winter), '休み');
+  const items = [];
+  [['数学', 5], ['英語', 3], ['国語', 2], ['物理', 1]].forEach(([s, n]) => { for (let i = 0; i < n; i++) items.push(it(s + i, s, 2, { order: i })); });
+  const plan = E.schedule(items.concat(books(1, 0, 0)), '2026-12-28', winter);
+  const c = (p) => plan.filter(q => q.id.startsWith(p)).length;
+  eq([c('数学'), c('英語'), c('国語'), plan.filter(q => ['shin', 'lead', 'excel'].includes(q.id)).length, plan.find(q => q.id === 'lead').unitIndex], [4, 2, 1, 1, 0]);
+});
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);

@@ -113,7 +113,7 @@
 
     /** モードの判定に使う予定(定期テスト=考査、行事=軽め) */
     modeEvents: () => S.all('events').filter(e => e.kind !== '模試')
-      .map(e => ({ start: e.date, end: e.date, isExam: e.kind === '定期テスト', subjects: e.kind === '定期テスト' ? (e.subjects || []) : [] })),
+      .map(e => ({ start: e.date, end: e.date, isExam: e.kind === '定期テスト', isVacation: e.kind === '長期休み', subjects: e.kind === '定期テスト' ? (e.subjects || []) : [] })),
 
     /** 教科ごとの苦手分野 */
     weakFields: () => E.weakFields(S.all('scores')),
@@ -133,7 +133,7 @@
       if (old) log.entries = [];
       const known = new Set(log.entries.map(e => e.material));
       const added = L.schedule(key).filter(q => !known.has(q.id))
-        .map(q => ({ material: q.id, quota: 1, done: 0, from: 1, amount: q.amount, unit: q.unit, reason: q.reason }));
+        .map(q => ({ material: q.id, quota: 1, done: 0, from: q.unitIndex ?? 1, amount: q.amount, unit: q.unit, reason: q.reason }));
       if (added.length || isNew || old) {
         log.entries = log.entries.concat(added);
         S.put('dayLogs', key, log);
@@ -155,7 +155,8 @@
       const items = L.materials().map(m => ({ id: m.id, subject: m.subject, name: m.name, role: m.role || 'メイン',
         everyDays: m.every ?? 0, group: m.group || '', amount: m.amount || 0, unit: m.unit || 'ページ',
         activeFrom: m.activeFrom || null, activeUntil: m.activeUntil || null, order: (m.routeOrder || 0) * 1000 + (m.order || 0),
-        lastDone: last[m.id] || null, laps: m.laps || [] }));
+        lastDone: last[m.id] || null, laps: m.laps || [],
+        pipeline: m.groupMode === '単元順' && !!m.group, units: (m.route || []).map(r => r.title), unitsDone: m.done || 0 }));
       const priority = {};
       L.subjectStates(key).forEach(s => { priority[s.name] = E.priority(s, false); });
       return E.schedule(items, key, L.modeEvents(), priority);
@@ -173,6 +174,14 @@
       const e = log.entries.find(x => x.material === materialID);
       if (!e) return;
       e.done = e.done > 0 ? 0 : e.quota;
+      // 単元の順に回す教材なら、終わった単元の数も進める/戻す
+      if (e.unit === '単元') {
+        const m = S.get('materials', materialID);
+        if (m) {
+          if (e.done > 0) m.done = Math.max(m.done || 0, e.from + 1); else if ((m.done || 0) === e.from + 1) m.done = e.from;
+          S.put('materials', m.id, m);
+        }
+      }
       S.put('dayLogs', key, log);
       S.save();
     },
@@ -288,6 +297,8 @@
         if (typeof item.unit === 'string') m.unit = item.unit;
         if (Number.isInteger(item.every)) { m.every = Math.max(0, item.every); m.daily = item.every === 1; }
         if ('every' in item || 'group' in item) m.group = item.group || '';
+        if ('every' in item || 'groupMode' in item) m.groupMode = item.groupMode || '';
+        if (Array.isArray(item.units)) m.route = item.units.map((t, i) => ({ title: t, from: i + 1, to: i + 1, field: '' }));
         if ('every' in item || 'from' in item) m.activeFrom = item.from || null;
         if ('every' in item || 'until' in item) m.activeUntil = item.until || null;
         // 周回の予定(書いてあれば置きかえる。同じ周をもう終えていたら、終えた日は残す)

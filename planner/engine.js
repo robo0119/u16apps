@@ -196,10 +196,11 @@
   const covers = (e, subject) => !e.subjects.length || e.subjects.includes(subject);
   const inExamWindow = (day, e) => addDays(e.start, -EXAM_WINDOW) <= day && day <= e.end;
 
-  /** モード:行事の日 → 軽め、考査の14日前〜最終日 → 考査、それ以外 → 通常 */
+  /** モード:行事の日 → 軽め、考査の14日前〜最終日 → 考査、長期休み → 休み、それ以外 → 通常 */
   function modeOn(day, events) {
-    if (events.some(e => !e.isExam && e.start <= day && day <= e.end)) return '軽め';
+    if (events.some(e => !e.isExam && !e.isVacation && e.start <= day && day <= e.end)) return '軽め';
     if (events.some(e => e.isExam && inExamWindow(day, e))) return '考査';
+    if (events.some(e => e.isVacation && e.start <= day && day <= e.end)) return '休み';
     return '通常';
   }
 
@@ -207,7 +208,7 @@
   function weight(subject, day, events) {
     const mode = modeOn(day, events);
     if (mode === '軽め') return 0.5;
-    if (mode === '通常') return 1;
+    if (mode === '通常' || mode === '休み') return 1;
     return events.some(e => e.isExam && covers(e, subject) && inExamWindow(day, e)) ? 1.5 : 0.5;
   }
 
@@ -381,6 +382,24 @@
 
   const OTHER_EVERY = 2;
   const WEEKEND_PICKS = [['数学', 3], ['英語', 2], ['物理', 1], ['化学', 1]];
+  const VACATION_PICKS = [['数学', 4], ['英語', 2], ['国語', 1], ['物理', 1], ['化学', 1]];
+
+  /** 単元の順に回すグループで、今日やる教材と単元を選ぶ(並び 0,1,0,2… で試し、1つ前の教材が終えた単元だけやれる) */
+  function pipelinePick(members) {
+    const stages = members.slice().sort((a, b) => (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : 1));
+    if (!stages.length) return null;
+    const pattern = [0];
+    for (let s = 1; s < stages.length; s++) pattern.push(...(s === 1 ? [1] : [0, s]));
+    const total = stages.reduce((n, x) => n + (x.unitsDone || 0), 0);
+    const first = pattern[total % pattern.length];
+    const allowed = (s) => { const u = stages[s].unitsDone || 0; return u < (stages[s].units || []).length && (s === 0 || u < (stages[s - 1].unitsDone || 0)); };
+    for (const s of [first, ...stages.map((_, i) => i).filter(i => i !== first)]) {
+      if (!allowed(s)) continue;
+      const item = stages[s], unit = item.unitsDone || 0;
+      return { item, unit, reason: s === 0 ? `${item.name}:これからの単元「${item.units[unit]}」` : `${item.name}:前の単元「${item.units[unit]}」をもう一度` };
+    }
+    return null;
+  }
 
   /** 日の番号(2000年1月1日から何日目か) */
   const dayIndex = (key) => daysBetween('2000-01-01', key);
@@ -465,13 +484,26 @@
     };
     const isDaily = (i) => i.everyDays === 1 && !i.group;
     active.filter(isDaily).forEach(i => add(i, '毎日'));
+    const pipelines = {};
+    active.filter(i => i.pipeline && i.group).forEach(i => { (pipelines[i.group] = pipelines[i.group] || []).push(i); });
+    /** 単元の順に回すグループから1つ入れる */
+    const addPipeline = (members) => {
+      const pick = pipelinePick(members);
+      if (!pick || chosen.has(pick.item.id)) return false;
+      members.forEach(m => chosen.add(m.id));
+      result.push({ id: pick.item.id, amount: 1, unit: '単元', reason: pick.reason, unitIndex: pick.unit });
+      return true;
+    };
     const wd = weekdayOf(day);
-    if (wd === 1 || wd === 7) {
-      const cands = active.filter(i => !isDaily(i));
-      WEEKEND_PICKS.forEach(([subject, count]) => {
+    if (wd === 1 || wd === 7 || mode === '休み') {
+      const picks = mode === '休み' ? VACATION_PICKS : WEEKEND_PICKS, label = mode === '休み' ? '休み' : '土日';
+      const used = {};
+      Object.keys(pipelines).sort().forEach(name => { if (addPipeline(pipelines[name])) used[pipelines[name][0].subject] = (used[pipelines[name][0].subject] || 0) + 1; });
+      const cands = active.filter(i => !isDaily(i) && !i.pipeline);
+      picks.forEach(([subject, count]) => {
         cands.filter(i => i.subject === subject && !chosen.has(i.id))
-          .sort((a, b) => (schedScore(b, day, priority) - schedScore(a, day, priority)) || byOrder(a, b)).slice(0, count)
-          .forEach(i => add(i, `土日:${subject}を重点に、前回からの日数で選んだ`));
+          .sort((a, b) => (schedScore(b, day, priority) - schedScore(a, day, priority)) || byOrder(a, b)).slice(0, Math.max(0, count - (used[subject] || 0)))
+          .forEach(i => add(i, `${label}:${subject}を重点に、前回からの日数で選んだ`));
       });
       return result;
     }
@@ -499,6 +531,8 @@
           const best = pool.reduce((a, b) => schedScore(b, day, priority) > schedScore(a, day, priority) ? b : a);
           add(best, 'その他:教科の優先度と、前回からの日数で選んだ');
         }
+      } else if (slot.members.some(i => i.pipeline)) {
+        addPipeline(slot.members.filter(i => activeIDs.has(i.id)));
       } else if (slot.members.length === 1) {
         if (activeIDs.has(slot.members[0].id)) add(slot.members[0], slot.label);
       } else {
@@ -512,7 +546,7 @@
   }
 
   const Engine = {
-    dayIndex, weekdayOccurrences, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel,
+    dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
     ability, weakness, urgency, priority, allocate, content, reason, plan, redistribute,
     modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota, isActive,
