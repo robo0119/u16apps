@@ -242,13 +242,30 @@
   /** その問題番号が入っているルートの区切り */
   const stepFor = (problem, route) => (route || []).find(s => s.from <= problem && problem <= s.to) || null;
 
-  /** 教材ごとの今日のノルマ(苦手分野 → 考査に出る教科 → ノルマの多い順) */
+  /** 役割ごとに今日のノルマを出すか:メイン・毎日はいつも、考査用は考査モードで考査に出る教科だけ、補助・後回しは出さない */
+  function isActive(m, today, events) {
+    const role = m.role || 'メイン';
+    if (role === '補助' || role === '後回し') return false;
+    if (role === '考査用') {
+      if (modeOn(today, events) !== '考査') return false;
+      const subs = examSubjects(today, events);
+      return subs === null || subs.has(m.subject);
+    }
+    return true;
+  }
+
+  /** 教材ごとの今日のノルマ(苦手分野 → 考査に出る教科 → ノルマの多い順)。総問題数が未定(0)なら、毎日やるものだけ1日1回 */
   function planQuota(materials, today, events, weakFields) {
     const exam = examSubjects(today, events);
     const isExamDay = modeOn(today, events) === '考査';
     const list = [];
     materials.forEach(m => {
+      if (!isActive(m, today, events)) return;
       const due = deadline(m, today, events);
+      if (!(m.total > 0)) {
+        if (m.isDaily) list.push({ materialID: m.id, subject: m.subject, quota: 1, from: m.done + 1, to: m.done + 1, field: null, isWeakField: false, deadline: due });
+        return;
+      }
       const remaining = Math.max(0, m.total - m.done);
       const q = quota(remaining, today, due, d => weight(m.subject, d, events));
       if (q <= 0) return;
@@ -363,7 +380,7 @@
   const Engine = {
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
     ability, weakness, urgency, priority, allocate, content, reason, plan, redistribute,
-    modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota,
+    modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota, isActive,
     latest, reviewDue, todaysQueue, reviewDoneToday, weakIn, weakFields, isAchieved, streak,
     MAX_TICKETS,
   };

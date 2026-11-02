@@ -119,7 +119,8 @@
     weakFields: () => E.weakFields(S.all('scores')),
 
     /** 教材をエンジンの形にする */
-    materialPlans: () => L.materials().map(m => ({ id: m.id, subject: m.subject, total: m.total, done: m.done, deadline: m.deadline || null, route: m.route || [] })),
+    materialPlans: () => L.materials().map(m => ({ id: m.id, subject: m.subject, total: m.total, done: m.done, deadline: m.deadline || null,
+      route: m.route || [], role: m.role || 'メイン', isDaily: !!m.daily || m.role === '毎日' })),
 
     /** 今日の記録を作る(あれば、あとから増えた教材のノルマだけ足す)。ノルマは1日の最初に決めて変えない */
     ensureDayLog(key) {
@@ -188,7 +189,9 @@
     addProgress(count, materialID, key) {
       const m = S.get('materials', materialID);
       if (!m) return;
-      S.put('materials', m.id, { ...m, done: Math.min(m.total, Math.max(0, m.done + count)) });
+      // 総問題数が未定(0)の教材は、上限なしで数える
+      const next = Math.max(0, m.done + count);
+      S.put('materials', m.id, { ...m, done: m.total > 0 ? Math.min(m.total, next) : next });
       const log = L.ensureDayLog(key);
       const entry = log.entries.find(e => e.material === materialID);
       if (entry) { entry.done = Math.max(0, entry.done + count); S.put('dayLogs', key, log); }
@@ -222,6 +225,81 @@
       }).filter(Boolean);
       const prot = new Set(Object.keys(overall.status).filter(d => overall.status[d] === 'ticket'));
       return E.streak(days, key, false, prot);
+    },
+
+    // ---- まとめた JSON の読み込み(iOS版の MaterialImporter.swift と同じ)----
+
+    /**
+     * 教材・予定・プロフィールを読み込む。教材のIDは「json-<id>」なので、何回読んでも二重にならず更新される
+     * 総問題数・完了数は JSON に書いてあるときだけ上書き(入れた数を消さない)
+     */
+    importJSON(json) {
+      if (!json || !Array.isArray(json.materials)) throw new Error('materials の一覧がありません');
+      const sum = { added: 0, updated: 0, events: 0, subjects: 0 };
+      json.materials.forEach(item => {
+        if (item.subject && item.subject !== '全教科' && !L.subjects().some(s => s.name === item.subject)) {
+          const n = L.subjects().length;
+          S.put('subjects', S.newID(), { name: item.subject, colorIndex: n, order: n });
+          sum.subjects++;
+        }
+      });
+      let nextOrder = L.materials().reduce((m, x) => Math.max(m, x.order || 0), -1) + 1;
+      json.materials.forEach(item => {
+        if (!item.id || !item.name || !item.subject) return;
+        const id = `json-${item.id}`;
+        const old = S.get('materials', id);
+        const role = ['メイン', '毎日', '考査用', '補助', '後回し'].includes(item.role) ? item.role : 'メイン';
+        const kind = ['問題集', '参考書', '単語帳', '過去問', '教科書・副教材', 'ルーティーン', '映像授業'].includes(item.type) ? item.type : '問題集';
+        const total = Number.isInteger(item.total ?? item.totalProblems) ? Math.max(0, item.total ?? item.totalProblems) : (old ? old.total : 0);
+        const done = Number.isInteger(item.done) ? Math.max(0, item.done) : (old ? old.done : 0);
+        S.put('materials', id, {
+          ...(old || { route: [], deadline: null, order: nextOrder++ }),
+          subject: item.subject, name: item.name, role, kind, period: item.period || '', note: item.note || '',
+          routeOrder: Number.isInteger(item.route) ? item.route : null, total, done,
+          daily: (old && old.daily) || role === '毎日',
+        });
+        if (old) sum.updated++; else sum.added++;
+      });
+      (json.events || []).forEach(item => {
+        const kind = L.eventKind(item.name || ''), when = L.parseWhen(item.when || '');
+        if (!item.name || !kind || !when) return;
+        const id = `json-ev-${item.name}-${item.when}`.replace(/\//g, '-');
+        if (S.get('events', id)) return;
+        S.put('events', id, { title: when.tentative ? `${item.name}(日付は仮)` : item.name, kind, date: when.date, hasTime: false,
+          start: 540, end: 900, subjects: item.name.includes('英検') ? ['英語'] : [], periodFrom: null, periodTo: null });
+        sum.events++;
+      });
+      if (json.profile) {
+        const p = json.profile, lines = [];
+        if (p.grade) lines.push(`学年:${p.grade}`);
+        if (p.goal) lines.push(`目標:${p.goal}`);
+        if (p.strong && p.strong.length) lines.push(`得意:${p.strong.join('、')}`);
+        if (p.weak && p.weak.length) lines.push(`苦手:${p.weak.join('、')}`);
+        if (p.english) lines.push(`英語:${p.english}`);
+        S.put('settings', 'main', { ...L.settings(), profile: lines.join('\n') });
+      }
+      S.save();
+      L.ensureDayLog(L.today());
+      return `教材 ${sum.added}件追加・${sum.updated}件更新、予定 ${sum.events}件、教科 ${sum.subjects}件`;
+    },
+
+    /** 予定の種類:考査 → 定期テスト、模試・試験 → 模試、申込・締切 → 入れない、それ以外 → 行事 */
+    eventKind(name) {
+      if (/締切|申込/.test(name)) return null;
+      if (/考査|定期テスト/.test(name)) return '定期テスト';
+      if (/模試|試験|検定/.test(name)) return '模試';
+      return '行事';
+    },
+
+    /** 日付:「2027-01-24」はその日、「2026年11月上旬/中旬/下旬/末」は5/15/25/28日(仮)、「2027年2月」は15日(仮) */
+    parseWhen(text) {
+      let m = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+      const key = (y, mo, d) => `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (m) return { date: key(m[1], m[2], m[3]), tentative: false };
+      m = text.match(/(\d{4})年(\d{1,2})月/);
+      if (!m) return null;
+      const day = /上旬/.test(text) ? 5 : /中旬/.test(text) ? 15 : /下旬/.test(text) ? 25 : /末/.test(text) ? 28 : 15;
+      return { date: key(m[1], m[2], day), tentative: true };
     },
   };
   root.Logic = L;

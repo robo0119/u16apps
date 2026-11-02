@@ -57,6 +57,19 @@ test('苦手分野の問題が、いちばん上に出る', () => {
   eq([plan[0].materialID, plan[0].field, plan[0].from], ['a', '確率', 21]);
 });
 
+test('後回し・補助はノルマに出ない。考査用は考査モードの日だけ、考査に出る教科で出る', () => {
+  const ex = { start: d(11, 20), end: d(11, 20), isExam: true, subjects: ['数学'] };
+  const m = (id, subject, role) => ({ id, subject, total: 30, done: 0, deadline: d(11, 30), route: [], role });
+  const list = [m('main', '国語', 'メイン'), m('later', '国語', '後回し'), m('help', '数学', '補助'), m('examM', '数学', '考査用'), m('examJ', '国語', '考査用')];
+  eq(E.planQuota(list, d(11, 1), [ex], {}).map(q => q.materialID), ['main']);
+  eq(E.planQuota(list, d(11, 10), [ex], {}).map(q => q.materialID).sort(), ['examM', 'main']);
+});
+test('総問題数が未定の教材は、毎日やるものだけ「1日1回」', () => {
+  const plan = E.planQuota([{ id: 'd', subject: '英語', total: 0, done: 3, route: [], role: '毎日', isDaily: true },
+    { id: 'm', subject: '英語', total: 0, done: 0, route: [], role: 'メイン' }], d(11, 1), [], {});
+  eq(plan.map(q => [q.materialID, q.quota]), [['d', 1]]);
+});
+
 // ---- 解き直し ----
 const at = (no, date, mark, t = 0) => ({ material: 'a', no, date, mark, at: t });
 test('×は翌日、△は3日後に出る。○は出ない', () => {

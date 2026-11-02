@@ -6,7 +6,13 @@
   const E = Engine, S = Store, L = Logic;
   const DAYS = ['', '日', '月', '火', '水', '木', '金', '土'];
   const PALETTE = ['#4078f2', '#ed5c6b', '#33ad73', '#f7992e', '#9461e6', '#1aa8bf', '#c7854d', '#808c9e'];
-  const ROLES = ['授業準備', '基礎', '演習', '暗記', '過去問'];
+  const ROLES = ['メイン', '毎日', '考査用', '補助', '後回し'];
+  const ROLE_NOTE = { 'メイン': '毎日ノルマを出す', '毎日': '毎日ノルマを出し、連続記録もつける', '考査用': '考査モードの日だけノルマを出す',
+    '補助': 'ノルマは出さない(必要なときに使う)', '後回し': 'ノルマは出さない(あとで始める)' };
+  const ROLE_ICON = { 'メイン': '★', '毎日': '🔥', '考査用': '📝', '補助': '🛟', '後回し': '🕒' };
+  const KINDS = ['問題集', '参考書', '単語帳', '過去問', '教科書・副教材', 'ルーティーン', '映像授業'];
+  /** 問題ごとに ○△× をつけるか(問題集・過去問で、総問題数が決まっているとき) */
+  const usesMarks = (m) => (m.kind === '問題集' || m.kind === '過去問' || !m.kind) && m.total > 0;
   const MODE_NOTE = { '通常': 'いつものペース', '考査': '考査に出る教科を多めに', '軽め': '行事の日はノルマ半分' };
 
   // 時刻 ⇔ 「0時からの分」
@@ -118,9 +124,9 @@
     return `<div class="qrow">
       <div class="qhead">${tag(i.m.subject)}<b class="name">${esc(i.m.name)}</b>
         <b style="color:${E.isAchieved(i.e.quota, i.e.done) ? 'var(--ok)' : 'inherit'}">${i.e.done}/${i.e.quota}</b></div>
-      <div class="muted">問題 ${i.e.from}〜${i.e.from + i.e.quota - 1}${i.field ? '・' + esc(i.field) : ''} ${i.weak ? '<span class="weak">苦手分野</span>' : ''}</div>
-      ${i.m.role === '暗記'
-        ? `<div class="row" style="margin-top:8px"><span>進んだ数 ${i.e.done}</span>
+      <div class="muted">${i.m.total > 0 ? `問題 ${i.e.from}〜${i.e.from + i.e.quota - 1}` : '今日1回(やったら＋)'}${i.field ? '・' + esc(i.field) : ''} ${i.weak ? '<span class="weak">苦手分野</span>' : ''}</div>
+      ${!usesMarks(i.m)
+        ? `<div class="row" style="margin-top:8px"><span>${i.m.total > 0 ? `進んだ数 ${i.e.done}` : (i.e.done > 0 ? 'やった ✓' : 'まだ')}</span>
             <button class="secondary" data-act="prog" data-m="${i.m.id}" data-n="-1">−</button>
             <button data-act="prog" data-m="${i.m.id}" data-n="1">＋</button></div>`
         : `<div class="chipgrid">${nums.map(n => { const mk = L.todaysMark(i.m.id, n, key); return `<button class="pchip ${mk ? 'm-' + mk : ''} ${sel === n ? 'sel' : ''}" data-act="chip" data-m="${i.m.id}" data-no="${n}"><small>${n}</small>${mk || '&nbsp;'}</button>`; }).join('')}</div>
@@ -141,17 +147,23 @@
     const subjects = L.subjects();
     const mats = L.materials();
     let html = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">教材</h2>
-      <button data-act="new-material">＋ 教材を追加</button></div>`;
+      <div class="row"><label class="button secondary" style="margin:0;color:var(--accent)">JSONから読み込む<input type="file" accept=".json,application/json" id="import-json" hidden></label>
+      <button data-act="new-material">＋ 教材を追加</button></div></div>
+      ${state.importMessage ? `<div class="notice">${esc(state.importMessage)}</div>` : ''}`;
     if (!mats.length) return html + '<div class="card"><p class="muted">問題集・単語帳などを追加しよう</p></div>';
-    const order = subjects.map(s => s.name);
+    const order = subjects.map(s => s.name).concat(['全教科']);
     const groups = {};
     mats.forEach(m => { (groups[m.subject] = groups[m.subject] || []).push(m); });
     Object.keys(groups).sort((a, b) => (order.indexOf(a) + 99) % 199 - (order.indexOf(b) + 99) % 199).forEach(sub => {
-      html += `<div class="card"><h2>${tag(sub)}</h2>${groups[sub].map(m => `
-        <div class="mrow" data-act="open-material" data-id="${m.id}">
-          <div class="grow"><b>${esc(m.name)}</b> ${m.daily ? '<span class="warn" style="font-size:.8rem">毎日</span>' : ''}
-            <div class="progress" style="margin:6px 0"><i style="width:${m.total ? Math.min(100, m.done / m.total * 100) : 0}%"></i></div>
-            <span class="muted">${esc(m.role)}・${m.done}/${m.total}問${m.deadline ? `・締め切り ${md(m.deadline)}` : ''}</span></div><span class="muted">›</span>
+      // 役割の順(メイン → 毎日 → 考査用 → 補助 → 後回し)、同じ役割なら使う順番
+      const list = groups[sub].slice().sort((a, b) => (ROLES.indexOf(a.role) - ROLES.indexOf(b.role)) || ((a.routeOrder ?? 99) - (b.routeOrder ?? 99)) || ((a.order || 0) - (b.order || 0)));
+      html += `<div class="card"><h2>${tag(sub)}</h2>${list.map(m => `
+        <div class="mrow" data-act="open-material" data-id="${m.id}" style="${m.role === '後回し' || m.role === '補助' ? 'opacity:.7' : ''}">
+          <span style="width:24px;text-align:center">${ROLE_ICON[m.role] || '★'}</span>
+          <div class="grow"><b>${m.routeOrder ? `<span class="muted">${m.routeOrder}</span> ` : ''}${esc(m.name)}</b>
+            ${m.total > 0 ? `<div class="progress" style="margin:6px 0"><i style="width:${Math.min(100, m.done / m.total * 100)}%"></i></div>` : ''}
+            <div class="muted">${[m.role, m.kind, m.period, m.total > 0 ? `${m.done}/${m.total}` : '', m.deadline ? `締め切り ${md(m.deadline)}` : ''].filter(Boolean).map(esc).join('・')}</div>
+            ${m.note ? `<div class="muted" style="font-size:.85rem">${esc(m.note)}</div>` : ''}</div><span class="muted">›</span>
         </div>`).join('')}</div>`;
     });
     return html;
@@ -174,12 +186,16 @@
       <h2 style="margin:0;flex:1">${esc(m.name)}</h2>
       <button class="secondary" data-act="edit-material" data-id="${m.id}">編集</button>
       <button class="danger" data-act="delete-material" data-id="${m.id}">削除</button></div>
-      <div class="card"><div class="row">${tag(m.subject)}<span>${esc(m.role)}</span><b>${m.done}/${m.total}問</b>
+      <div class="card"><div class="row">${tag(m.subject)}<span>${esc(m.role)}・${esc(m.kind || '問題集')}${m.period ? '・' + esc(m.period) : ''}</span>${m.total > 0 ? `<b>${m.done}/${m.total}問</b>` : ''}
         <span style="color:var(--ok)">○${counts['○']}</span><span style="color:var(--tri)">△${counts['△']}</span><span style="color:var(--ng)">×${counts['×']}</span></div>
-        <div class="progress" style="margin-top:8px"><i style="width:${Math.min(100, m.done / total * 100)}%"></i></div>
+        ${m.total > 0 ? `<div class="progress" style="margin-top:8px"><i style="width:${Math.min(100, m.done / total * 100)}%"></i></div>` : ''}
         ${ms ? `<p style="margin:10px 0 0"><b>🔥 ${ms.current}日連続</b>・最長 ${ms.longest}日</p>` : ''}
-        ${sel ? markBar(m.id, sel, L.todaysMark(m.id, sel, key)) : '<p class="muted" style="margin:8px 0 0">番号を押すと、今日の ○△× を付けられます</p>'}</div>
-      ${steps.map(s => `<div class="card"><h2>${esc(s.title)}${s.field ? '・' + esc(s.field) : ''}</h2><div class="chipgrid">
+        ${m.note ? `<p class="muted" style="margin:8px 0 0">${esc(m.note)}</p>` : ''}
+        ${!usesMarks(m) ? `<div class="row" style="margin-top:10px"><span>進んだ数 ${m.done}${m.total > 0 ? '/' + m.total : ''}</span>
+            <button class="secondary" data-act="prog" data-m="${m.id}" data-n="-1">−</button><button data-act="prog" data-m="${m.id}" data-n="1">＋</button></div>
+            <p class="muted">${m.kind === '問題集' || m.kind === '過去問' ? '総問題数を入れると、問題ごとに ○△× をつけられます' : esc(m.kind || '') + 'は、進んだ数だけ数えます'}</p>`
+          : sel ? markBar(m.id, sel, L.todaysMark(m.id, sel, key)) : '<p class="muted" style="margin:8px 0 0">番号を押すと、今日の ○△× を付けられます</p>'}</div>
+      ${(usesMarks(m) ? steps : []).map(s => `<div class="card"><h2>${esc(s.title)}${s.field ? '・' + esc(s.field) : ''}</h2><div class="chipgrid">
         ${Array.from({ length: s.to - s.from + 1 }, (_, i) => s.from + i).map(n => `<button class="pchip ${latestMark[n] ? 'm-' + latestMark[n] : ''} ${sel === n ? 'sel' : ''}" data-act="chip" data-m="${m.id}" data-no="${n}"><small>${n}</small>${latestMark[n] || '&nbsp;'}</button>`).join('')}
       </div></div>`).join('')}`;
   }
@@ -190,16 +206,19 @@
     return `<div class="card"><h2>${f.id ? '教材を編集' : '教材を追加'}</h2>
       <div class="fg">
         <div><label>教科</label>${L.subjects().length
-          ? `<select id="mf-subject">${L.subjects().map(s => `<option ${s.name === f.subject ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>`
+          ? `<select id="mf-subject">${[...new Set(L.subjects().map(s => s.name).concat(f.subject ? [f.subject] : []))].map(n => `<option ${n === f.subject ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`
           : `<input id="mf-subject" value="${esc(f.subject)}" placeholder="例:数学">`}</div>
         <div><label>教材名</label><input id="mf-name" value="${esc(f.name)}" placeholder="例:青チャート"></div>
+        <div><label>種類</label><select id="mf-kind">${KINDS.map(k => `<option ${k === f.kind ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
         <div><label>役割</label><select id="mf-role">${ROLES.map(r => `<option ${r === f.role ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
-        <div><label>総問題数</label><input id="mf-total" type="number" min="1" value="${f.total}"></div>
+        <div><label>使う時期</label><input id="mf-period" value="${esc(f.period || '')}" placeholder="例:今〜12月"></div>
+        <div style="grid-column:1/-1"><label>メモ</label><input id="mf-note" value="${esc(f.note || '')}"></div>
+        <div><label>総問題数(0 = 未定)</label><input id="mf-total" type="number" min="0" value="${f.total}"></div>
         <div><label>完了</label><input id="mf-done" type="number" min="0" value="${f.done}"></div>
         <div><label>締め切り(任意)</label><input id="mf-deadline" type="date" value="${f.deadline || ''}"></div>
       </div>
       <div class="checks" style="margin-top:12px"><label><input type="checkbox" id="mf-daily" ${f.daily ? 'checked' : ''}>毎日やる(教材ごとの連続記録を出す)</label></div>
-      <p class="muted">締め切りがなければ、その教科の次の考査の前日(なければ30日後)</p>
+      <p class="muted">${esc(ROLE_NOTE[f.role] || '')}。総問題数が0(未定)の間はノルマが出ません(毎日やるものは1日1回)。締め切りがなければ、その教科の次の考査の前日(なければ30日後)</p>
       <h2 style="margin-top:16px">教材ルート</h2>
       <p class="muted">分野を模試の分野名と同じにすると、苦手分野の問題が先に出ます</p>
       <div id="mf-route">${f.route.map((s, i) => `<div class="route-row">
@@ -217,7 +236,8 @@
   function readMaterialForm() {
     const f = state.form;
     f.subject = $('mf-subject').value.trim(); f.name = $('mf-name').value.trim(); f.role = $('mf-role').value;
-    f.total = Math.max(1, Number($('mf-total').value) || 1); f.done = Math.max(0, Number($('mf-done').value) || 0);
+    f.total = Math.max(0, Number($('mf-total').value) || 0); f.done = Math.max(0, Number($('mf-done').value) || 0);
+    f.kind = $('mf-kind').value; f.period = $('mf-period').value.trim(); f.note = $('mf-note').value.trim();
     f.deadline = $('mf-deadline').value || null; f.daily = $('mf-daily').checked;
     document.querySelectorAll('#mf-route [data-r]').forEach(inp => {
       const s = f.route[Number(inp.dataset.r)];
@@ -423,7 +443,7 @@
     'open-material'(el) { state.detail = el.dataset.id; state.chip = null; render(); window.scrollTo(0, 0); },
     'close-detail'() { state.detail = null; state.chip = null; render(); },
     'new-material'() {
-      state.form = { id: null, subject: (L.subjects()[0] || {}).name || '', name: '', role: '演習', total: 100, done: 0, deadline: null, daily: false, route: [] };
+      state.form = { id: null, subject: (L.subjects()[0] || {}).name || '', name: '', role: 'メイン', kind: '問題集', period: '', note: '', total: 0, done: 0, deadline: null, daily: false, route: [] };
       render();
     },
     'edit-material'(el) { const m = S.get('materials', el.dataset.id); state.form = { ...m, route: (m.route || []).map(s => ({ ...s })) }; render(); },
@@ -445,11 +465,12 @@
       if (!f.name || !f.subject) { alert('教科と教材名を入れてください'); return; }
       // 教科がまだなければ、一緒に作る
       const list = L.subjects();
-      if (!list.some(s => s.name === f.subject)) S.put('subjects', S.newID(), { name: f.subject, colorIndex: list.length, order: list.length });
+      if (f.subject !== '全教科' && !list.some(s => s.name === f.subject)) S.put('subjects', S.newID(), { name: f.subject, colorIndex: list.length, order: list.length });
       const id = f.id || S.newID();
       const old = S.get('materials', id);
-      S.put('materials', id, { subject: f.subject, name: f.name, role: f.role, total: f.total, done: Math.min(f.done, f.total),
-        daily: f.daily, order: old ? old.order : L.materials().reduce((m, x) => Math.max(m, x.order || 0), -1) + 1,
+      S.put('materials', id, { subject: f.subject, name: f.name, role: f.role, kind: f.kind, period: f.period, note: f.note,
+        routeOrder: old ? (old.routeOrder ?? null) : null, total: f.total, done: f.total > 0 ? Math.min(f.done, f.total) : f.done,
+        daily: f.daily || f.role === '毎日', order: old ? old.order : L.materials().reduce((m, x) => Math.max(m, x.order || 0), -1) + 1,
         deadline: f.deadline || null, route: f.route.filter(s => s.from <= s.to).sort((a, b) => a.from - b.from) });
       state.form = null; state.detail = id;
       L.ensureDayLog(today());
@@ -550,8 +571,14 @@
     const fn = ACTIONS[el.dataset.act];
     if (fn) fn(el);
   });
-  document.addEventListener('change', (ev) => {
+  document.addEventListener('change', async (ev) => {
     const el = ev.target;
+    if (el.id === 'import-json' && el.files[0]) {
+      try { state.importMessage = L.importJSON(JSON.parse(await el.files[0].text())); }
+      catch (e) { state.importMessage = 'JSONを読めませんでした(' + e.message + ')'; }
+      commit();
+      return;
+    }
     if (el.dataset.act === 'task') { ACTIONS.task(el); return; }
     if (el.dataset.actChange || el.dataset.set) onChange(el);
   });
