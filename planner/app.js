@@ -141,7 +141,7 @@
     const subjects = L.subjects();
     const mats = L.materials();
     let html = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">教材</h2>
-      <button data-act="new-material" ${subjects.length ? '' : 'disabled'}>＋ 教材を追加</button></div>`;
+      <button data-act="new-material">＋ 教材を追加</button></div>`;
     if (!mats.length) return html + '<div class="card"><p class="muted">問題集・単語帳などを追加しよう</p></div>';
     const order = subjects.map(s => s.name);
     const groups = {};
@@ -189,7 +189,9 @@
     const f = state.form;
     return `<div class="card"><h2>${f.id ? '教材を編集' : '教材を追加'}</h2>
       <div class="fg">
-        <div><label>教科</label><select id="mf-subject">${L.subjects().map(s => `<option ${s.name === f.subject ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+        <div><label>教科</label>${L.subjects().length
+          ? `<select id="mf-subject">${L.subjects().map(s => `<option ${s.name === f.subject ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>`
+          : `<input id="mf-subject" value="${esc(f.subject)}" placeholder="例:数学">`}</div>
         <div><label>教材名</label><input id="mf-name" value="${esc(f.name)}" placeholder="例:青チャート"></div>
         <div><label>役割</label><select id="mf-role">${ROLES.map(r => `<option ${r === f.role ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
         <div><label>総問題数</label><input id="mf-total" type="number" min="1" value="${f.total}"></div>
@@ -214,7 +216,7 @@
   /** フォームの入力を下書きに読み込む */
   function readMaterialForm() {
     const f = state.form;
-    f.subject = $('mf-subject').value; f.name = $('mf-name').value.trim(); f.role = $('mf-role').value;
+    f.subject = $('mf-subject').value.trim(); f.name = $('mf-name').value.trim(); f.role = $('mf-role').value;
     f.total = Math.max(1, Number($('mf-total').value) || 1); f.done = Math.max(0, Number($('mf-done').value) || 0);
     f.deadline = $('mf-deadline').value || null; f.daily = $('mf-daily').checked;
     document.querySelectorAll('#mf-route [data-r]').forEach(inp => {
@@ -441,6 +443,9 @@
       readMaterialForm();
       const f = state.form;
       if (!f.name || !f.subject) { alert('教科と教材名を入れてください'); return; }
+      // 教科がまだなければ、一緒に作る
+      const list = L.subjects();
+      if (!list.some(s => s.name === f.subject)) S.put('subjects', S.newID(), { name: f.subject, colorIndex: list.length, order: list.length });
       const id = f.id || S.newID();
       const old = S.get('materials', id);
       S.put('materials', id, { subject: f.subject, name: f.name, role: f.role, total: f.total, done: Math.min(f.done, f.total),
