@@ -55,37 +55,37 @@
     const log = L.ensureDayLog(key);
     const tasks = L.tasks(key).sort((a, b) => (a.carry ? 0 : 1) - (b.carry ? 0 : 1) || b.minutes - a.minutes);
     const total = tasks.reduce((s, t) => s + t.minutes, 0);
-    const doneMin = tasks.filter(t => t.done).reduce((s, t) => s + t.minutes, 0);
     const next = L.nextTest(key);
     const streak = L.streak(key);
     const day = L.streakDays().find(d => d.date === key) || { quota: 0, done: 0 };
     const achieved = E.isAchieved(day.quota, day.done);
 
-    html += `<div class="card"><div class="row" style="justify-content:space-between">
-      <div><h2 style="font-size:1.4rem;margin:0">${md(key)}</h2>
-      <div class="muted">勉強 ${total}分・${tasks.filter(t => t.done).length}/${tasks.length} 完了</div>
-      ${next ? `<div class="${E.daysBetween(key, next.date) <= 7 ? 'bad' : 'warn'}" style="font-weight:700">${E.daysBetween(key, next.date) === 0 ? `今日は${esc(next.title)}!` : `${esc(next.title)}まで あと${E.daysBetween(key, next.date)}日`}</div>` : ''}</div>
-      <div style="width:84px"><div class="stat"><b>${total ? Math.round(doneMin / total * 100) : 0}%</b><span>時間の計画</span></div></div>
-    </div></div>`;
-
-    html += `<div class="card">
-      <div class="row"><span class="pill mode-${log.mode}">${log.mode}モード</span><span class="muted">${MODE_NOTE[log.mode]}</span></div>
-      <div class="streak-row" style="margin-top:12px">
-        <div class="flame"><span>🔥</span>${streak.current}日</div>
-        <div style="flex:1;min-width:180px">
-          ${day.quota > 0 ? `<b>今日 ${day.done}/${day.quota}</b>
-            <div class="progress" style="margin:6px 0"><i style="width:${Math.min(100, day.done / day.quota * 100)}%;background:${achieved ? 'var(--ok)' : 'var(--tri)'}"></i></div>
-            <span class="muted">${achieved ? '今日は達成!' : `あと${Math.max(0, Math.ceil(day.quota * 0.8) - day.done)}つで達成`}</span>`
-            : '<span class="muted">教材を登録すると、ノルマが出ます</span>'}
-        </div>
-        <div class="muted" style="text-align:right">最長 ${streak.longest}日<br>${'🎟️'.repeat(streak.tickets) || 'チケット0'}</div>
-      </div></div>`;
+    // いちばん上のカード:あいさつ・日付・モード・ノルマの輪・連続記録・次のテスト
+    const needed = Math.ceil(day.quota * 0.8);
+    const ratio = day.quota ? Math.min(1, day.done / day.quota) : 0;
+    const hour = new Date().getHours();
+    const greet = hour >= 4 && hour < 11 ? 'おはよう' : hour < 17 && hour >= 11 ? 'こんにちは' : 'こんばんは';
+    const nextDays = next ? E.daysBetween(key, next.date) : null;
+    html += `<div class="hero hero-${log.mode}">
+      <div class="row" style="justify-content:space-between;align-items:flex-start"><div><div style="opacity:.85;font-weight:700">${greet}</div>
+        <div style="font-size:1.5rem;font-weight:800">${md(key)}</div></div><span class="hero-pill">${log.mode}モード</span></div>
+      <div class="row" style="gap:18px;margin-top:12px;flex-wrap:nowrap">
+        <div class="ring" style="--p:${ratio * 100}"><b>${day.done}</b><small>/ ${day.quota}</small></div>
+        <div>${day.quota > 0 ? `<div style="font-size:1.15rem;font-weight:800">${achieved ? '今日のノルマ達成!' : `あと${Math.max(0, needed - day.done)}つで達成`}</div>
+          <div style="opacity:.85;font-size:.85rem">${day.quota}つのうち${needed}つ(8割)できたら達成</div>` : '<div>教材を登録すると、今日のノルマが出ます</div>'}
+          <div style="font-weight:800;margin-top:4px">🔥 ${streak.current}日連続${streak.tickets ? `・おやすみ券 ${streak.tickets}枚` : ''}</div></div>
+      </div>
+      <div style="opacity:.9;font-size:.85rem;margin-top:10px">${MODE_NOTE[log.mode]}${next ? `・<b>${esc(next.title.replace('(日付は仮)', ''))}${nextDays === 0 ? 'は今日' : `まで あと${nextDays}日`}</b>` : ''}</div>
+    </div>`;
+    // 達成していなかった → 達成した、に変わったらお祝い
+    if (state.wasAchieved === false && achieved) celebrate(streak.current);
+    state.wasAchieved = achieved;
 
     const items = L.todayMaterials(log);
     if (L.materials().length) {
       html += `<div class="card"><h2>今日のノルマ</h2>
         ${items.length ? items.map(quotaRow).join('') : '<p class="muted">今日のノルマはありません</p>'}
-        <p class="muted" style="margin-bottom:0">毎日・N日に1回・交互・その他を決まりで選びます。8割チェックで達成</p></div>`;
+        <p class="muted" style="margin-bottom:0">終わったら丸をタップ。8割チェックで達成です</p></div>`;
     }
     const reviews = L.todayReviews(key);
     if (reviews.length) {
@@ -98,16 +98,17 @@
         </div>`).join('')}</div>`;
     }
 
-    html += `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">時間の計画</h2>
-      <button class="secondary" data-act="regen">作り直す</button></div>
+    html += `<details class="card" ${state.showTime ? 'open' : ''} data-time><summary><b>🕒 時間の目安</b> <span class="muted">${total}分</span></summary>
+      <p class="muted">学校・部活の時間から計算した、今日勉強できる時間と、教科ごとの時間の目安</p>
+      <div class="row" style="justify-content:flex-end"><button class="secondary" data-act="regen">作り直す</button></div>
       ${tasks.length ? tasks.map(t => `<label class="task ${t.done ? 'done' : ''}" style="margin:0;color:var(--text)">
         <input type="checkbox" data-act="task" data-id="${t.id}" ${t.done ? 'checked' : ''}>
         <div><div>${tag(t.subject)} <b>${t.minutes}分</b> <span class="c">${esc(t.content)}</span>${t.carry ? ' <span class="warn">やり残し</span>' : ''}</div>
-        <div class="reason">💡 ${esc(t.reason)}</div></div></label>`).join('') : '<p class="muted">今日は勉強時間なし</p>'}</div>`;
+        <div class="reason">💡 ${esc(t.reason)}</div></div></label>`).join('') : '<p class="muted">今日は予定がいっぱいで、勉強の時間はとれません</p>'}`;
 
     const b = E.availableTime(L.dayContext(key));
     const factor = E.loadFactor(L.recentResults(key));
-    html += `<div class="card"><h2>使える時間</h2><table>
+    html += `<h3 style="margin:16px 0 6px">使える時間の計算</h3><table>
       <tr><td></td><td>起きている時間</td><td class="num">${b.awake}分</td></tr>
       <tr><td>−</td><td>学校(通学ふくむ)</td><td class="num">${b.school}分</td></tr>
       <tr><td>−</td><td>部活・塾などの予定</td><td class="num">${b.events}分</td></tr>
@@ -115,7 +116,7 @@
       <tr><td>−</td><td>休憩(50分ごとに10分)</td><td class="num">${b.breaks}分</td></tr>
       <tr><td>=</td><td><b>勉強に使える時間</b></td><td class="num"><b>${b.study}分</b></td></tr>
       ${factor < 1 ? `<tr><td>×</td><td><b>ペース調整 ${Math.round(factor * 100)}%</b></td><td class="num"><b>${E.adjustedMinutes(b.study, factor)}分</b></td></tr>` : ''}
-    </table></div>`;
+    </table></details>`;
     return html;
   }
 
@@ -125,7 +126,49 @@
     return `<label class="task ${done ? 'done' : ''}" style="margin:0;color:var(--text)">
       <input type="checkbox" data-act="quota" data-m="${i.m.id}" ${done ? 'checked' : ''}>
       <div style="flex:1"><div>${tag(i.m.subject)} <b class="c">${esc(i.m.name)}</b>${i.e.amount > 0 ? ` <b>${i.e.amount}${esc(i.e.unit)}</b>` : ''}</div>
-      <div class="reason">💡 ${esc(i.e.reason || '')} ${lapBadge(i.m)}</div>${i.m.note ? `<div class="reason">${esc(i.m.note)}</div>` : ''}</div></label>`;
+      <div style="margin-top:4px"><span class="rtag" style="color:${color(i.m.subject)};background:color-mix(in srgb, ${color(i.m.subject)} 14%, transparent)">${esc(shortReason(i.e.reason || ''))}</span> ${lapBadge(i.m)}</div>
+      ${i.e.unit === '単元' ? `<div style="font-size:.85rem">${esc(i.e.reason)}</div>` : ''}</div></label>`;
+  }
+
+  /** 選んだ理由の短い表示(毎日・2日に1回・交互・おまかせ・土日・休みの日・単元の順) */
+  function shortReason(r) {
+    if (r.startsWith('毎日')) return '毎日';
+    if (r.startsWith('その他')) return 'おまかせ';
+    if (r.startsWith('土日')) return '土日';
+    if (r.startsWith('休み')) return '休みの日';
+    if (r.includes('単元')) return '単元の順';
+    if (r.includes('交互')) return '交互';
+    const m = r.match(/\d+日に1回/);
+    return m ? m[0] : r;
+  }
+
+  /** ノルマ達成のお祝い(紙ふぶきと大きな文字。2.5秒で消える) */
+  function celebrate(days) {
+    const box = document.createElement('div');
+    box.className = 'celebrate';
+    const colors = ['#ffd23f', '#ff6b9a', '#ff9f1c', '#2ec4b6', '#9b5de5', '#3a86ff'];
+    box.innerHTML = Array.from({ length: 40 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${colors[i % 6]};animation-delay:${(i % 9) * 0.06}s"></i>`).join('') +
+      `<div class="celebrate-card"><div style="font-size:3.5rem">🔥</div><b>今日のノルマ達成!</b><div>${days}日連続</div></div>`;
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 2600);
+  }
+
+  /** 使い方(はじめて開いたときと、「?」ボタン) */
+  function showHelp() {
+    const box = document.createElement('div');
+    box.className = 'help';
+    const topics = [
+      ['✅', '今日のノルマ', '毎日やる教材や、2日・3日に1回の教材が自動で並びます。終わったら丸をタップ。全体の8割にチェックできたら、その日は達成です。'],
+      ['🔥', '連続記録とおやすみ券', '達成した日が続くと連続記録がのびます。7日続けるごとに「おやすみ券」が1枚(最大2枚)。できなかった日に自動で使われ、記録が途切れません。'],
+      ['📊', '周回とロードマップ', '教材ごとに「何周目を、いつまでに」を決めてあります。教材タブのロードマップで全部の予定を横棒で見られます。早く終わったら教材の画面で「終えた」。'],
+      ['🌅', 'モード', '定期テストの2週間前からは「考査」、行事の日は「軽め」、冬休みなどは「休み」で多めに。ノルマが自動で変わります。'],
+      ['↩️', '解き直し', '教材の画面で、間違えた問題を ×(翌日)や △(3日後)で記録すると、その日の「解き直し」に出ます。'],
+      ['🕒', '時間の目安', '学校や部活の時間から計算した、勉強できる時間の目安です。「時間の目安」を開くと見られます。'],
+    ];
+    box.innerHTML = `<div class="help-card"><h2>StudyPilot の使い方</h2>${topics.map(([i, t, d]) => `<div class="help-row"><span>${i}</span><div><b>${t}</b><p>${d}</p></div></div>`).join('')}
+      <button style="width:100%">はじめる</button></div>`;
+    box.querySelector('button').onclick = () => box.remove();
+    document.body.appendChild(box);
   }
 
   /** 周回の状態の小さなラベル(遅れは赤、途中は青、まだは灰) */
@@ -226,7 +269,7 @@
       <button class="secondary" data-act="edit-material" data-id="${m.id}">編集</button>
       <button class="danger" data-act="delete-material" data-id="${m.id}">削除</button></div>
       <div class="card"><div class="row">${tag(m.subject)}<span>${esc(m.role)}・${esc(m.kind || '問題集')}${m.period ? '・' + esc(m.period) : ''}</span>${m.total > 0 ? `<b>${m.done}/${m.total}問</b>` : ''}
-        <span style="color:var(--ok)">○${counts['○']}</span><span style="color:var(--tri)">△${counts['△']}</span><span style="color:var(--ng)">×${counts['×']}</span></div>
+        ${counts['○'] + counts['△'] + counts['×'] ? `<span style="color:var(--ok)">○できた ${counts['○']}</span><span style="color:var(--tri)">△あやしい ${counts['△']}</span><span style="color:var(--ng)">×まちがい ${counts['×']}</span>` : ''}</div>
         ${m.total > 0 ? `<div class="progress" style="margin-top:8px"><i style="width:${Math.min(100, m.done / total * 100)}%"></i></div>` : ''}
         ${ms ? `<p style="margin:10px 0 0"><b>🔥 ${ms.current}日連続</b>・最長 ${ms.longest}日</p>` : ''}
         ${m.note ? `<p class="muted" style="margin:8px 0 0">${esc(m.note)}</p>` : ''}
@@ -303,7 +346,7 @@
       const st = streak.status[k];
       const ev = events[k];
       cells += `<div class="d ${st === 'achieved' || st === 'ticket' || st === 'missed' ? st : ''} ${k === key ? 'today' : ''}">${d}
-        <small style="color:${ev ? (ev.kind === '行事' ? '#1aa8bf' : 'var(--ng)') : 'transparent'}">${ev ? (ev.kind === '行事' ? '⚑' : '✎') : '・'}</small></div>`;
+        <small style="color:${ev ? (ev.kind === '行事' ? '#1aa8bf' : ev.kind === '長期休み' ? 'var(--tri)' : 'var(--ng)') : 'transparent'}">${ev ? (ev.kind === '行事' ? '⚑' : ev.kind === '長期休み' ? '☀' : '✎') : '・'}</small></div>`;
     }
     const daily = L.materials().filter(m => m.daily);
     return `<div class="card"><div class="stats">
@@ -609,6 +652,7 @@
     async signup() { await auth('signUp'); },
     logout() { Auth.signOut(); render(); },
     sync() { runSync(); },
+    help() { showHelp(); },
   };
 
   /** ログイン・登録して、すぐ同期する */
@@ -679,6 +723,8 @@
       history.replaceState(null, '', location.pathname);
     }
     render();
+    try { if (!localStorage.getItem('planner.seenHelp')) { localStorage.setItem('planner.seenHelp', '1'); showHelp(); } } catch (e) { /* なし */ }
+    document.addEventListener('toggle', (ev) => { if (ev.target.matches && ev.target.matches('[data-time]')) state.showTime = ev.target.open; }, true);
     if (Auth.user && Sync.configured()) runSync();
     // 画面に戻ってきたら同期する
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !state.form) runSync(); });

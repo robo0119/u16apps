@@ -131,7 +131,11 @@
       // 前のしくみ(問題数のノルマ)で作った今日の記録は、作り直す(まだ何もしていなければ)
       const old = log.entries.some(e => !e.unit && !e.reason) && log.entries.every(e => !e.done);
       if (old) log.entries = [];
+      // 単元の順に回すグループは、その日1冊だけ(1冊終えると次の教材が選ばれるが、同じ日には足さない)
       const known = new Set(log.entries.map(e => e.material));
+      const mats = L.materials();
+      mats.filter(m => m.groupMode === '単元順' && m.group && known.has(m.id))
+        .forEach(m => mats.filter(x => x.group === m.group).forEach(x => known.add(x.id)));
       const added = L.schedule(key).filter(q => !known.has(q.id))
         .map(q => ({ material: q.id, quota: 1, done: 0, from: q.unitIndex ?? 1, amount: q.amount, unit: q.unit, reason: q.reason }));
       if (added.length || isNew || old) {
