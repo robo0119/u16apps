@@ -24,10 +24,20 @@
   const toTime = (m) => { const x = ((m % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
   const md = (key) => { const d = E.toDate(key); return `${d.getMonth() + 1}/${d.getDate()}(${DAYS[d.getDay() + 1]})`; };
 
-  /** 教科の色 */
+  /**
+   * よくある教科の決まった色の番号(iOS版の SubjectPalette.fixed と同じ)
+   * 国語=青、数学=赤、英語=緑、化学=オレンジ、物理=紫、生物・地学=青緑、社会=茶
+   */
+  const FIXED_COLORS = [
+    [['国語', '現代文', '古文', '漢文', '古典', '言語文化', '論理国語'], 0], [['数'], 1], [['英'], 2], [['化学'], 3], [['物理'], 4],
+    [['生物', '地学', '理科'], 5], [['社会', '歴史', '日本史', '世界史', '地理', '公共', '政治', '倫理'], 6],
+  ];
+  /** 教科の色(決まった色がある教科はそれ、ほかは登録の色の番号。登録になくても灰色にしない) */
   function color(name) {
+    const hit = FIXED_COLORS.find(([words]) => words.some(w => (name || '').includes(w)));
+    if (hit) return PALETTE[hit[1]];
     const s = L.subjects().find(x => x.name === name);
-    return s ? PALETTE[((s.colorIndex % 8) + 8) % 8] : '#808c9e';
+    return PALETTE[s ? ((s.colorIndex % 8) + 8) % 8 : 7];
   }
   const tag = (name) => `<span class="tag" style="background:${color(name)}">${esc(name)}</span>`;
 
@@ -85,7 +95,8 @@
     if (L.materials().length) {
       const custom = L.customEntries(log);
       html += `<div class="sec-head"><span>今日のノルマ</span><span>${items.filter(i => i.e.done > 0).length + custom.filter(e => e.done > 0).length}/${items.length + custom.length}</span></div>
-        <div class="card list">${items.length || custom.length ? items.map(quotaRow).join('') + custom.map(customRow).join('') : '<p class="muted">今日のノルマはありません</p>'}
+        ${quotaGroupsHTML(items, custom)}
+        <div class="card list">${custom.length ? subjectHead('自分で追加', 'var(--accent)', custom.filter(e => e.done > 0).length, custom.length) + custom.map(customRow).join('') : ''}
           <button class="add-quota" data-act="add-open">＋ ノルマを足す</button>${state.addOpen ? addPanel(items) : ''}</div>
         <p class="sec-foot">終わったら丸をタップ。8割チェックで達成です。× で今日は外せます</p>`;
     }
@@ -123,11 +134,33 @@
   }
 
   /** 教材1つのノルマの行:チェック・教材名・1日の量・選んだ理由 */
+  /**
+   * 今日のノルマを教科ごとにまとめる(iOS版と同じ)
+   * 上に教科ごとの進み具合のタイル、そのあと教科ごとのカード(色の縦線・できた数・細いバー)
+   * 並び:主要教科(理系なら数学・理科・英語)→ 登録の順 → 登録にない教科
+   */
+  function quotaGroupsHTML(items, custom) {
+    if (!items.length && !custom.length) return '<div class="card"><p class="muted">今日のノルマはありません</p></div>';
+    const track = L.settings().track || 'なし';
+    const subs = L.subjects();
+    const order = subs.filter(x => E.isCore(track, x.name)).concat(subs.filter(x => !E.isCore(track, x.name))).map(x => x.name);
+    const idx = (n) => { const i = order.indexOf(n); return i < 0 ? 99 : i; };
+    const names = [...new Set(items.map(i => i.m.subject))].sort((a, b) => idx(a) - idx(b) || a.localeCompare(b));
+    const groups = names.map(n => { const list = items.filter(i => i.m.subject === n); return { n, list, c: color(n), done: list.filter(i => i.e.done > 0).length }; });
+    const tiles = `<div class="sub-tiles">${groups.map(g => { const fin = g.done === g.list.length;
+      return `<div class="sub-tile ${fin ? 'fin' : ''}" style="--c:${g.c}"><small>${esc(g.n)}${fin ? ' ✓' : ''}</small><b>${g.done}/${g.list.length}</b></div>`; }).join('')}</div>`;
+    return `<div class="card">${tiles}</div>` + groups.map(g => `<div class="card list qgroup">${subjectHead(g.n, g.c, g.done, g.list.length)}${g.list.map(quotaRow).join('')}</div>`).join('');
+  }
+
+  /** 教科のまとまりの見出し:色の縦線・名前・できた数(全部できたら「完了」)・進み具合のバー(できた数 ÷ 数) */
+  const subjectHead = (name, c, done, total) => `<div class="sub-head" style="--c:${c}"><div><i></i><b>${esc(name)}</b><span>${done === total && total ? '✓ 完了' : `${done}/${total}`}</span></div>
+    <div class="sub-bar"><span style="width:${total ? done / total * 100 : 0}%"></span></div></div>`;
+
   function quotaRow(i) {
     const done = i.e.done > 0, c = color(i.m.subject);
     return `<label class="qitem ${done ? 'done' : ''}" style="--c:${c}">
       <input type="checkbox" class="circle" data-act="quota" data-m="${i.m.id}" ${done ? 'checked' : ''}>
-      <div class="qbody"><div class="qtop"><span class="chip-s">${esc(i.m.subject)}</span><b class="qname">${esc(i.m.name)}</b>
+      <div class="qbody"><div class="qtop"><b class="qname">${esc(i.m.name)}</b>
         ${i.e.amount > 0 ? `<span class="qamt">${i.e.amount}${esc(i.e.unit)}</span>` : ''}</div>
         <div class="qtags"><span class="rtag">${esc(shortReason(i.e.reason || ''))}</span> ${lapBadge(i.m)}</div>
         ${i.e.unit === '単元' ? `<div class="qunit">${esc(i.e.reason)}</div>` : ''}</div>
@@ -895,6 +928,7 @@
       if (data && data.kind === 'planner') importLegacy(data);
       history.replaceState(null, '', location.pathname);
     }
+    L.dedupe();   // 足りない教科を作り直す(ログインしていなくても)
     render();
     try { if (!localStorage.getItem('planner.seenHelp')) { localStorage.setItem('planner.seenHelp', '1'); showHelp(); } } catch (e) { /* なし */ }
     document.addEventListener('toggle', (ev) => { if (ev.target.matches && ev.target.matches('[data-time]')) state.showTime = ev.target.open; }, true);

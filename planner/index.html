@@ -6,8 +6,8 @@
   <title>StudyPilot | Sotaのapp</title>
   <link rel="icon" href="../icons/studyplanner.png">
   <link rel="apple-touch-icon" href="../icons/studyplanner.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261103h">
-  <script src="../common/gate.js?v=20261103h"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261103i">
+  <script src="../common/gate.js?v=20261103i"></script>
   <style>
     :root { --accent: #5b4ee0; --ok: #2f9e57; --tri: #f08a24; --ng: #e2474f; --ticket: #a35ee6; }
     .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
@@ -74,6 +74,21 @@
     .card.list { padding: 4px 16px; }
     .sec-head { display: flex; justify-content: space-between; color: var(--muted); font-size: .85rem; font-weight: 700; margin: 18px 6px 6px; }
     .sec-foot { color: var(--muted); font-size: .8rem; margin: -8px 6px 16px; }
+    /* 教科ごとのまとまり */
+    .sub-tiles { display: flex; gap: 8px; overflow-x: auto; }
+    .sub-tile { flex: none; min-width: 64px; padding: 8px 12px; border-radius: 12px; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); display: flex; flex-direction: column; }
+    .sub-tile small { font-weight: 800; font-size: .75rem; }
+    .sub-tile b { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+    .sub-tile.fin { color: #fff; background: var(--c); }
+    .sub-head { margin: 2px 0 4px; }
+    .sub-head > div:first-child { display: flex; align-items: center; gap: 6px; }
+    .sub-head i { width: 4px; height: 16px; border-radius: 2px; background: var(--c); }
+    .sub-head b { flex: 1; }
+    .sub-head span { color: var(--c); font-weight: 800; font-size: .8rem; font-variant-numeric: tabular-nums; }
+    .sub-bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--c) 15%, transparent); margin-top: 6px; overflow: hidden; }
+    .sub-bar span { display: block; height: 100%; background: var(--c); transition: width .3s; }
+    .qgroup { margin-top: 10px; }
+    .qgroup input.circle:not(:checked) { border-color: color-mix(in srgb, var(--c) 50%, transparent); }
     .qitem { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--text); margin: 0; cursor: pointer; }
     .qitem:last-child { border-bottom: none; }
     input.circle { appearance: none; -webkit-appearance: none; flex: none; width: 26px; height: 26px; min-height: 26px; padding: 0; margin-top: 2px; border-radius: 50%; border: 2px solid #c7c7cc; background: transparent; position: relative; transition: transform .15s; }
@@ -194,13 +209,13 @@
   <main id="view"></main>
   <footer>データはこのブラウザと、ログインしていれば Firebase(本人だけが読み書きできる場所)に保存されます。</footer>
 
-  <script src="../common/bridge.js?v=20261103h"></script>
-  <script src="../common/charts.js?v=20261103h"></script>
-  <script src="../common/firebase-config.js?v=20261103h"></script>
-  <script src="engine.js?v=20261103h"></script>
-  <script src="store.js?v=20261103h"></script>
-  <script src="../common/sync.js?v=20261103h"></script>
-  <script src="logic.js?v=20261103h"></script>
-  <script src="app.js?v=20261103h"></script>
+  <script src="../common/bridge.js?v=20261103i"></script>
+  <script src="../common/charts.js?v=20261103i"></script>
+  <script src="../common/firebase-config.js?v=20261103i"></script>
+  <script src="engine.js?v=20261103i"></script>
+  <script src="store.js?v=20261103i"></script>
+  <script src="../common/sync.js?v=20261103i"></script>
+  <script src="logic.js?v=20261103i"></script>
+  <script src="app.js?v=20261103i"></script>
 </body>
 </html>

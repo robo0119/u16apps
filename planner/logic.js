@@ -121,13 +121,21 @@
      * 残すのは並び順がいちばん前(同じならIDの小さいほう)。消したものは同期で iPhone からも消える
      */
     dedupe() {
+      // 作り直す教科の並び:国語・数学・英語・化学・物理・生物など・社会 → そのほか(名前の順)
+      const rank = (n) => { const i = ['国語|現代文|古文|漢文|古典', '数', '英', '化学', '物理', '生物|地学|理科', '社会|歴史|地理|公共|政治|倫理'].findIndex(p => new RegExp(p).test(n)); return i < 0 ? 99 : i; };
       let changed = false;
       const byName = {};
       S.all('subjects').forEach(s => { (byName[s.name] = byName[s.name] || []).push(s); });
       Object.values(byName).filter(l => l.length > 1).forEach(l => {
-        const keep = l.slice().sort((a, b) => (a.order - b.order) || (a.id < b.id ? -1 : 1))[0];
+        // 残すのは ID のいちばん小さいもの(並び順は端末でずれることがあるので使わない。iOS版と同じ)
+        const keep = l.slice().sort((a, b) => (a.id < b.id ? -1 : 1))[0];
         l.filter(s => s.id !== keep.id).forEach(s => { S.remove('subjects', s.id); changed = true; });
       });
+      // 教材にある教科が登録されていなければ作り直す(「全教科」は教科にしない)
+      const have = new Set(S.all('subjects').map(s => s.name));
+      [...new Set(S.all('materials').map(m => m.subject))].filter(n => n && n !== '全教科' && n !== '全部' && !have.has(n))
+        .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+        .forEach((n, i) => { S.put('subjects', S.newID(), { name: n, colorIndex: have.size + i, order: have.size + i }); changed = true; });
       const bySlot = {};
       S.all('timetable').forEach(t => { const k = `${t.weekday}-${t.period}`; (bySlot[k] = bySlot[k] || []).push(t); });
       Object.values(bySlot).filter(l => l.length > 1).forEach(l => {
