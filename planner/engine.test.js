@@ -218,5 +218,19 @@ test('土日は良問かプラチカのどちらか(前にやってから日が�
 });
 test('祝日も良問かプラチカが出る', () => { const c = E.schedule(we(), d(11, 3), []).map(q => q.id); eq(c.includes('ryomon') || c.includes('platika'), true); });
 
+// ---- 考査の偏差値の目安・文系理系(Track.swift と同じ)----
+test('考査:平均点と同じなら50、満点の15%上なら60', () => { eq(E.estimateDeviation(60, 100, 60, null, null), 50); eq(Math.round(E.estimateDeviation(75, 100, 60, null, null) * 1000) / 1000, 60); });
+test('考査:順位があれば順位、真ん中なら50・上位は高い・80まで', () => {
+  eq(Math.abs(E.estimateDeviation(50, 100, 90, 120, 240) - 50) < 0.2, true);
+  const top = E.estimateDeviation(90, 100, null, 3, 240); eq(top > 70 && top <= 80, true);
+  eq(E.estimateDeviation(90, 100, null, 1, 10000), 80);
+});
+test('種類が空なら名前で模試か決める', () => { eq(E.isMock({ testName: '第2回 進研模試' }), true); eq(E.isMock({ testName: '期末考査' }), false); eq(E.isMock({ testName: 'x', kind: '模試' }), true); });
+test('理系は数学・理科が1.2倍、主要教科は数学・理科・英語', () => {
+  eq([E.trackWeight('理系', '数学'), E.trackWeight('理系', '化学'), E.trackWeight('理系', '英語'), E.trackWeight('理系', '国語')], [1.2, 1.2, 1, 1]);
+  eq([E.isCore('理系', '英語'), E.isCore('理系', '国語')], [true, false]);
+  eq(E.priority({ weakness: 50, trackWeight: 1.2 }, false) > E.priority({ weakness: 50 }, false), true);
+});
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);

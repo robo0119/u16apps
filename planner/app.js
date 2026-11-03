@@ -208,37 +208,71 @@
     return `<span class="lapb lapb-${st.state}">${esc(E.lapLabel(st))}</span>`;
   }
 
-  /** 周回のロードマップ:教材ごとに、何周目をいつからいつまでに、を横棒で */
+  /** 日付を「12/23」の形に */
+  const mdShort = (key) => { const d = E.toDate(key); return `${d.getMonth() + 1}/${d.getDate()}`; };
+
+  /**
+   * 周回のロードマップ(iOS版の RoadmapView と同じ):教科ごとに、教材の「何周目を、いつからいつまでに」を横の帯で
+   * - 上:遅れ・やっている周・30日以内に締切の数と、遅れている教材
+   * - 帯の左はしは今日の1週間前。位置 = (その日 − 左はし) ÷ (右はし − 左はし)
+   * - 今の周は、始めから今日までを濃く。終えた周はうすく ✓
+   */
   function roadmapHTML() {
     const key = today();
     const months = state.rmRange ?? 6;
+    const start = E.addDays(key, -7);
     const allEnd = L.materials().flatMap(m => (m.laps || []).map(l => l.end)).sort().pop() || key;
-    let end = key;
-    if (months) { const d = E.toDate(key); d.setMonth(d.getMonth() + months); end = E.keyOf(d); } else end = allEnd;
-    const span = Math.max(1, E.daysBetween(key, end));
-    const pos = (k) => Math.max(0, Math.min(100, E.daysBetween(key, k) / span * 100));
-    const order = L.subjects().map(x => x.name).concat(['全部']);
-    const mats = L.materials().filter(m => (m.laps || []).some(l => l.end >= key && l.start <= end))
-      .sort((a, b) => ((order.indexOf(a.subject) + 99) % 199 - (order.indexOf(b.subject) + 99) % 199) || ((a.routeOrder ?? 99) - (b.routeOrder ?? 99)) || ((a.order || 0) - (b.order || 0)));
+    let end;
+    if (months) { const d = E.toDate(key); d.setMonth(d.getMonth() + months); end = E.keyOf(d); }
+    else { const d = E.toDate(key); d.setMonth(d.getMonth() + 1); end = allEnd > E.keyOf(d) ? allEnd : E.keyOf(d); }
+    const span = Math.max(1, E.daysBetween(start, end));
+    const pos = (k) => Math.max(0, Math.min(100, E.daysBetween(start, k) / span * 100));
+    const order = L.subjects().map(x => x.name);
+    const idx = (name) => { const i = order.indexOf(name); return i < 0 ? 99 : i; };
+    const statuses = L.materials().filter(m => (m.laps || []).length).map(m => ({ m, st: E.lapStatus(m.laps, key) })).filter(x => x.st);
+    const late = statuses.filter(x => x.st.state === 'late').sort((a, b) => b.st.days - a.st.days);
+    const running = statuses.filter(x => x.st.state === 'running');
+    const soon = running.filter(x => x.st.days <= 30).length;
+    // テストの旗(考査はオレンジ、模試は青、英検は紫。同じ名前が続く日はまとめる)
+    const flags = [];
+    S.all('events').filter(e => (e.kind === '定期テスト' || e.kind === '模試' || e.title.includes('英検')) && e.date >= start && e.date <= end)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .forEach(e => { if (!flags.some(f => f.title === e.title && Math.abs(E.daysBetween(f.date, e.date)) < 4)) flags.push(e); });
+    const flagColor = (e) => e.title.includes('英検') ? '#9b51e0' : e.kind === '定期テスト' ? '#f08a24' : '#3478f6';
+    const shortName = (e) => { if (e.title.includes('英検')) return '英検'; const t = e.title.replace(/前期|後期/g, '').split(/[(（]/)[0].trim(); return t.length > 8 ? t.slice(0, 8) : t; };
     // 月の目盛り
     let ticks = '';
-    const t = E.toDate(key); t.setDate(1); t.setMonth(t.getMonth() + 1);
+    const t = E.toDate(start); t.setDate(1); t.setMonth(t.getMonth() + 1);
     while (E.keyOf(t) <= end) { ticks += `<span class="rm-tick" style="left:${pos(E.keyOf(t))}%">${t.getMonth() + 1}月</span>`; t.setMonth(t.getMonth() + 1); }
-    const lines = S.all('events').filter(e => (e.kind === '定期テスト' || e.title.includes('英検')) && e.date >= key && e.date <= end)
-      .map(e => `<span class="rm-line" style="left:${pos(e.date)}%"></span>`).join('');
-    const rows = mats.map(m => `<div class="rm-row"><div class="rm-name">${esc(m.name)}</div><div class="rm-track">${lines}
-      ${(m.laps || []).filter(l => l.end >= key && l.start <= end).map(l => {
-        const a = pos(l.start < key ? key : l.start), b = pos(l.end > end ? end : l.end);
-        return `<span class="rm-bar" title="${l.lap}周目 ${md(l.start)}〜${md(l.end)} ${esc(l.scope || '')}" style="left:${a}%;width:${Math.max(1.5, b - a)}%;background:${color(m.subject)};opacity:${l.done ? 0.35 : 0.9}">${l.lap}</span>`;
-      }).join('')}</div></div>`).join('');
-    const current = L.materials().filter(m => (m.laps || []).length).map(m => ({ m, st: E.lapStatus(m.laps, key) }))
-      .sort((a, b) => ({ late: 0, running: 1, upcoming: 2, finished: 3 }[a.st.state] - { late: 0, running: 1, upcoming: 2, finished: 3 }[b.st.state]) || ((a.st.days || 0) - (b.st.days || 0)));
+    const flagIcons = flags.map(e => `<span class="rm-flag" style="left:${pos(e.date)}%;color:${flagColor(e)}">⚑</span>`).join('');
+    const examLines = flags.filter(e => e.kind === '定期テスト').map(e => `<span class="rm-line" style="left:${pos(e.date)}%"></span>`).join('');
+    const todayLine = `<span class="rm-today" style="left:${pos(key)}%"></span>`;
+    // 教科ごとの教材
+    const mats = L.materials().filter(m => (m.laps || []).some(l => l.end >= start && l.start <= end));
+    const groups = [...new Set(mats.map(m => m.subject))].sort((a, b) => idx(a) - idx(b))
+      .map(sub => ({ sub, items: mats.filter(m => m.subject === sub).sort((a, b) => ((a.routeOrder ?? 99) - (b.routeOrder ?? 99)) || ((a.order || 0) - (b.order || 0))) }));
+    const lapBar = (l, c) => {
+      const a = pos(l.start), b = pos(E.addDays(l.end, 1)), w = Math.max(1.5, b - a);
+      // 今の周の濃い所 = (今日 − 始め) ÷ (終わり − 始め)
+      const elapsed = l.done ? 0 : Math.max(0, Math.min(100, (pos(key) - a) / w * 100));
+      return `<span class="rm-bar" title="${l.lap}周目 ${mdShort(l.start)}〜${mdShort(l.end)} ${esc(l.scope || '')}" style="left:${a}%;width:${w}%;background:color-mix(in srgb, ${c} ${l.done ? 25 : 45}%, transparent)">
+        ${elapsed > 0 ? `<i style="width:${elapsed}%;background:${c}"></i>` : ''}<b>${l.done ? '✓' : ''}${w > 9 ? `${l.lap}周目` : l.lap}</b></span>`;
+    };
+    const rows = groups.map(g => `<div class="card rm-group"><h3><i style="background:${color(g.sub)}"></i>${esc(g.sub)} <span class="muted">${g.items.length}冊</span></h3>
+      ${g.items.map(m => { const st = E.lapStatus(m.laps, key); const cur = st && st.lap;
+        return `<div class="rm-row"><div class="rm-name"><b>${esc(m.name)}</b>${lapBadge(m)}</div>
+          <div class="rm-track">${examLines}${(m.laps || []).filter(l => l.end >= start && l.start <= end).map(l => lapBar(l, color(m.subject))).join('')}${todayLine}</div>
+          ${cur && cur.scope ? `<div class="muted rm-scope">${cur.lap}周目:${esc(cur.scope)}(〜${mdShort(cur.end)})</div>` : ''}</div>`; }).join('')}</div>`).join('');
+    const tile = (v, label, cls, icon) => `<div class="rm-tile ${cls}"><span>${icon}</span><b>${v}</b><small>${label}</small></div>`;
     return `<div class="row" style="margin-bottom:12px"><button class="secondary" data-act="close-roadmap">‹ 教材</button><h2 style="margin:0;flex:1">ロードマップ</h2></div>
-      <div class="card"><div class="row">${[[3, '3か月'], [6, '半年'], [12, '1年'], [0, '全部']].map(([n, t]) => `<button class="${months === n ? '' : 'secondary'}" style="min-height:36px;padding:4px 14px" data-act="rm-range" data-n="${n}">${t}</button>`).join('')}</div>
-        <div class="rm-head">${ticks}</div>${rows || '<p class="muted">この期間の周回の予定はありません</p>'}
-        <p class="muted">棒の数字は何周目か。左はしが今日、オレンジの点線は定期テストと英検</p></div>
-      <div class="card"><h2>今の周回</h2>${current.map(x => `<div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)">
-        <span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color(x.m.subject)}"></i> ${esc(x.m.name)}</span>${lapBadge(x.m)}</div>`).join('')}</div>`;
+      <div class="rm-tiles">${tile(late.length, '遅れ', late.length ? 'bad' : '', '⚠︎')}${tile(running.length, 'やっている周', 'run', '↻')}${tile(soon, '30日以内に締切', 'soon', '🏁')}</div>
+      ${late.length ? `<div class="card rm-late"><b class="bad">⚠︎ 遅れている周</b>${late.map(x => `<div class="row" style="justify-content:space-between;padding:4px 0"><span><i class="dot" style="background:${color(x.m.subject)}"></i> ${esc(x.m.name)}</span>${lapBadge(x.m)}</div>`).join('')}
+        <p class="muted" style="margin:4px 0 0">終わっていたら、教材の画面で「終えた」に</p></div>` : ''}
+      <div class="row" style="margin:12px 0">${[[3, '3か月'], [6, '半年'], [12, '1年'], [0, '全部']].map(([n, t]) => `<button class="${months === n ? '' : 'secondary'}" style="min-height:36px;padding:4px 14px" data-act="rm-range" data-n="${n}">${t}</button>`).join('')}</div>
+      ${flags.length ? `<div class="rm-dates">${flags.map(e => `<span style="color:${flagColor(e)};background:color-mix(in srgb, ${flagColor(e)} 12%, transparent)">⚑ ${mdShort(e.date)} ${esc(shortName(e))}</span>`).join('')}</div>` : ''}
+      ${groups.length ? `<div class="rm-head">${ticks}${flagIcons}<span class="rm-todaylabel" style="left:${pos(key)}%">今日</span></div>${rows}` : '<div class="card"><p class="muted">この期間の周回の予定はありません</p></div>'}
+      <p class="muted rm-legend"><span><i style="background:var(--accent)"></i>今の周(濃い所がたった日数)</span><span><i style="background:color-mix(in srgb, var(--accent) 25%, transparent)"></i>終えた周</span>
+        <span style="color:#f08a24">⚑ 考査</span><span style="color:#3478f6">⚑ 模試</span><span style="color:#9b51e0">⚑ 英検</span><span style="color:var(--ng)">| 今日</span></p>`;
   }
 
   /** ○△×を選ぶボタン */
@@ -400,30 +434,70 @@
 
   // ---------------- 分析 ----------------
 
+  /** 結果を、テストの名前と日ごとにまとめる(新しい順) */
+  function testGroups() {
+    const by = {};
+    S.all('scores').forEach(x => { const k = `${x.date}|${x.testName}`; (by[k] = by[k] || []).push(x); });
+    return Object.entries(by).map(([key, records]) => ({ key, records, first: records[0] }))
+      .sort((a, b) => b.first.date.localeCompare(a.first.date) || b.first.testName.localeCompare(a.first.testName));
+  }
+  /** 数字を文字に(整数なら小数点なし) */
+  const num = (v) => Number.isInteger(v) ? String(v) : v.toFixed(1);
+  const pct = (x) => x.max > 0 ? x.score / x.max * 100 : 0;
+
   function renderAnalysis() {
     const subjects = L.subjects();
     const scores = S.all('scores');
+    const track = L.settings().track || 'なし';
     const key = today();
+    // 主要教科(理系なら数学・理科・英語)を先に
+    const ordered = subjects.filter(x => E.isCore(track, x.name)).concat(subjects.filter(x => !E.isCore(track, x.name)));
+    const orderIdx = (name) => { const i = ordered.findIndex(x => x.name === name); return i < 0 ? 99 : i; };
     let html = '';
+    const latest = testGroups()[0];
+    if (!scores.length) html += '<div class="card"><p class="muted">成績がまだありません(登録 → テストの結果)</p></div>';
+    if (latest && track !== 'なし') {
+      // 主要教科とほかの教科の、得点率の平均
+      const core = latest.records.filter(x => E.isCore(track, x.subject)), rest = latest.records.filter(x => !E.isCore(track, x.subject));
+      const avg = (list) => list.length ? list.reduce((t, x) => t + pct(x), 0) / list.length : null;
+      const devs = core.map(E.effectiveDeviation).filter(v => v != null);
+      html += `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0;color:#f08a24">★ ${esc(track)}の主要教科</h2><span class="muted">${esc(latest.first.testName)}</span></div>
+        <div class="stats" style="margin-top:10px"><div class="stat"><b>${avg(core) == null ? '—' : Math.round(avg(core)) + '%'}</b><span>${track === '理系' ? '数学・理科・英語' : '国語・社会・英語'}</span></div>
+        ${devs.length ? `<div class="stat"><b>${(devs.reduce((a, b) => a + b, 0) / devs.length).toFixed(1)}</b><span>${E.isMock(latest.first) ? '偏差値の平均' : '偏差値の目安'}</span></div>` : ''}
+        ${avg(rest) != null ? `<div class="stat"><b class="muted">${Math.round(avg(rest))}%</b><span>ほかの教科</span></div>` : ''}</div></div>`;
+    }
     if (scores.length) {
-      const series = subjects.map(s => ({ label: s.name, color: color(s.name),
-        points: scores.filter(x => x.subject === s.name).map(x => ({ x: E.toDate(x.date).getTime(), y: x.max > 0 ? x.score / x.max * 100 : 0 })) }))
+      const metric = state.metric || 'percent';
+      const series = ordered.map(s => ({ label: (E.isCore(track, s.name) ? '★' : '') + s.name, color: color(s.name),
+        points: scores.filter(x => x.subject === s.name).map(x => ({ x: E.toDate(x.date).getTime(), y: metric === 'percent' ? pct(x) : E.effectiveDeviation(x) })).filter(p => p.y != null) }))
         .filter(s => s.points.length);
-      html += `<div class="card"><h2>成績の推移(得点率%)</h2>${Charts.lines(series, { yMax: 100 })}</div>`;
-    } else {
-      html += '<div class="card"><p class="muted">成績がまだありません(登録 → テストの結果)</p></div>';
+      html += `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">成績の推移</h2>
+        <div class="row">${[['percent', '得点率'], ['deviation', '偏差値']].map(([k, t]) => `<button class="${metric === k ? '' : 'secondary'}" style="min-height:32px;padding:2px 12px" data-act="metric" data-k="${k}">${t}</button>`).join('')}</div></div>
+        ${Charts.lines(series, metric === 'percent' ? { yMax: 100 } : { yMin: 20, yMax: 80 })}
+        ${metric === 'deviation' ? '<p class="muted">考査は、順位か平均点から見積もった偏差値の目安</p>' : ''}</div>`;
+    }
+    if (latest) {
+      const rows = latest.records.slice().sort((a, b) => orderIdx(a.subject) - orderIdx(b.subject)).map(x => {
+        const dev = E.effectiveDeviation(x), diff = x.average != null ? x.score - x.average : null;
+        return `<tr><td>${E.isCore(track, x.subject) ? '<span style="color:#f08a24">★</span> ' : ''}${tag(x.subject)}</td><td class="num">${num(x.score)}/${num(x.max)}</td>
+          <td class="num">${diff != null ? `<b class="${diff >= 0 ? 'good' : 'bad'}">${diff >= 0 ? '+' : ''}${num(diff)}</b>` : ''}</td>
+          <td class="num muted">${x.rank != null ? `${x.rank}${x.takers ? '/' + x.takers : ''}位` : ''}</td>
+          <td class="num">${dev != null ? `<span class="devchip">${x.deviation != null ? dev.toFixed(1) : '≈' + Math.round(dev)}</span>` : ''}</td></tr>`;
+      }).join('');
+      html += `<div class="card"><h2>最新:${esc(latest.first.testName)}(${mdShort(latest.first.date)})</h2><table>${rows}</table>
+        <p class="muted">${E.isMock(latest.first) ? '右の数字は偏差値' : '緑・赤は平均点との差。右の ≈ は順位か平均点から見積もった偏差値の目安'}</p></div>`;
     }
     const weakBy = {};
     scores.filter(s => s.fields && s.fields.length).forEach(s => { if (!weakBy[s.subject] || weakBy[s.subject].date < s.date) weakBy[s.subject] = s; });
-    const weakList = Object.values(weakBy).map(s => ({ s, weak: E.weakIn(s.fields) })).filter(x => x.weak.length);
+    const weakList = Object.values(weakBy).map(s => ({ s, weak: E.weakIn(s.fields) })).filter(x => x.weak.length).sort((a, b) => orderIdx(a.s.subject) - orderIdx(b.s.subject));
     if (weakList.length) {
       html += `<div class="card"><h2>苦手分野(最新の模試)</h2>${weakList.map(x => `<p style="margin:6px 0">${tag(x.s.subject)} ${x.weak.map(f => `${esc(f.name)} <b class="bad">${Math.round(f.score / f.max * 100)}%</b>`).join('、')}</p>`).join('')}
         <p class="muted">得点率60%未満、または教科の平均より10点以上低い分野。教材ルートの同じ分野の問題が先に出ます</p></div>`;
     }
     if (subjects.length) {
-      const states = L.subjectStates(key).sort((a, b) => b.weakness - a.weakness);
-      html += `<div class="card"><h2>苦手度(0〜100)</h2>${Charts.bars(states.map(s => ({ label: s.name, value: s.weakness, color: color(s.name), note: Math.round(s.weakness) })), { max: 100 })}
-        <p class="muted">100 − 最近3回の平均(3:2:1)・下降で+10</p></div>`;
+      const states = L.subjectStates(key).sort((a, b) => (E.isCore(track, a.name) ? 0 : 1) - (E.isCore(track, b.name) ? 0 : 1) || b.weakness - a.weakness);
+      html += `<div class="card"><h2>苦手度(0〜100)</h2>${Charts.bars(states.map(s => ({ label: (E.isCore(track, s.name) ? '★' : '') + s.name, value: s.weakness, color: color(s.name), note: Math.round(s.weakness) })), { max: 100 })}
+        <p class="muted">100 − 最近3回の平均(3:2:1)・下降で+10。偏差値(考査は目安)があれば得点率と半々で使う。★は${esc(track)}の主要教科</p></div>`;
     }
     return html;
   }
@@ -463,6 +537,8 @@
         ${[['commute', '通学(片道・分)'], ['living', '食事・お風呂など(分)'], ['periodLength', '1コマ(分)'], ['periodBreak', '休み時間(分)'], ['lunchAfter', '昼休みは何時間目のあと'], ['lunchLength', '昼休み(分)'], ['afterLast', '終礼など(分)']].map(([k, l]) => `<div><label>${l}</label><input type="number" data-set="${k}" value="${s[k]}"></div>`).join('')}
         <div><label>1時間目の始まり</label><input type="time" data-set="firstPeriodStart" data-time="1" value="${toTime(s.firstPeriodStart)}"></div>
       </div></div>
+      <div class="card"><h2>文系・理系</h2><div class="row">${['理系', '文系', 'なし'].map(t => `<button class="${(s.track || 'なし') === t ? '' : 'secondary'}" data-act="track" data-t="${t}">${t}</button>`).join('')}</div>
+        <p class="muted">理系なら数学・理科の優先度を1.2倍にして、分析でも数学・理科・英語を先に出します</p></div>
       <div class="card"><h2>毎週の予定(部活・塾)</h2>
         <table>${weekly.map(w => `<tr><td>${DAYS[w.weekday]}</td><td>${esc(w.title)}</td><td>${toTime(w.start)}〜${toTime(w.end)}</td><td class="num"><button class="danger" data-act="del" data-c="weeklyEvents" data-id="${w.id}">消す</button></td></tr>`).join('') || '<tr><td class="muted">まだありません</td></tr>'}</table>
         <div class="fg"><div><label>名前</label><input id="w-title" placeholder="部活"></div>
@@ -482,17 +558,46 @@
           <div><label>終わり/何時間目まで</label><input id="e-e" placeholder="15:00 か 9"></div></div>
         <label>テストの教科(未選択 = 全教科)</label><div class="checks" id="e-subjects">${subjects.map(x => `<label><input type="checkbox" value="${esc(x.name)}">${esc(x.name)}</label>`).join('')}</div>
         <button data-act="add-event" style="margin-top:10px">追加</button></div>
-      <div class="card"><h2>テストの結果</h2>
-        <table>${scores.map(x => `<tr><td>${md(x.date)}</td><td>${esc(x.testName)}</td><td>${tag(x.subject)}</td>
-          <td class="num">${x.score}/${x.max}${x.deviation ? `<div class="muted">偏差値${x.deviation}</div>` : ''}${x.fields && x.fields.length ? `<div class="muted">分野別 ${x.fields.length}</div>` : ''}</td>
-          <td class="num"><button class="danger" data-act="del" data-c="scores" data-id="${x.id}">消す</button></td></tr>`).join('') || '<tr><td class="muted">まだありません</td></tr>'}</table>
-        <div class="fg"><div><label>テストの名前</label><input id="s-test" value="中間テスト"></div>
-          <div><label>日にち</label><input id="s-date" type="date" value="${today()}"></div>
-          <div><label>満点</label><input id="s-max" type="number" value="100"></div></div>
-        ${subjects.map(x => `<div class="fg" style="margin-top:6px"><div><label>${esc(x.name)}</label><input type="number" data-score="${esc(x.name)}" placeholder="点数"></div>
-          <div><label>偏差値(任意)</label><input type="number" step="0.1" data-dev="${esc(x.name)}"></div>
-          <div style="grid-column:span 2"><label>分野別(任意)例:二次関数 25/30, 確率 12/35</label><input data-fields="${esc(x.name)}"></div></div>`).join('')}
-        <button data-act="add-scores" style="margin-top:10px">保存</button></div>`;
+      ${scoresHTML(subjects)}`;
+  }
+
+  /**
+   * テストの結果(テストごとにまとめて表示。「直す」で下の入力欄に入れて直せる)
+   * 考査は 平均点・順位・人数、模試は 偏差値 を入れる(種類を切りかえると欄が変わる)
+   */
+  function scoresHTML(subjects) {
+    const groups = testGroups();
+    const order = subjects.map(x => x.name);
+    const editing = state.scoreEdit ? groups.find(g => g.key === state.scoreEdit) : null;
+    const rec = (name) => editing ? editing.records.find(r => r.subject === name) : null;
+    const first = editing ? editing.first : null;
+    const kind = first ? (E.isMock(first) ? '模試' : '考査') : '考査';
+    const maxes = editing ? editing.records.map(r => r.max) : [100];
+    const common = maxes.sort((a, b) => maxes.filter(v => v === b).length - maxes.filter(v => v === a).length)[0];
+    const names = order.concat(editing ? editing.records.map(r => r.subject).filter(n => !order.includes(n)) : []);
+    const v = (x) => x == null ? '' : x;
+    const detail = (r) => [r.deviation != null ? `偏差値${r.deviation}` : '', r.average != null ? `平均${num(r.average)}(${r.score - r.average >= 0 ? '+' : ''}${num(r.score - r.average)})` : '',
+      r.rank != null ? `${r.rank}${r.takers ? '/' + r.takers : ''}位` : '', r.fields && r.fields.length ? `分野別${r.fields.length}` : ''].filter(Boolean).join('・');
+    return `<div class="card"><h2>テストの結果</h2>
+      ${groups.map(g => `<div class="test-group"><div class="row" style="justify-content:space-between">
+          <div><span class="kind-tag ${E.isMock(g.first) ? 'mock' : 'exam'}">${E.isMock(g.first) ? '模試' : '考査'}</span> <b>${esc(g.first.testName)}</b> <span class="muted">${md(g.first.date)}</span></div>
+          <div class="row"><button class="secondary" style="min-height:32px;padding:2px 12px" data-act="score-edit" data-k="${esc(g.key)}">直す</button>
+          <button class="danger" data-act="score-del" data-k="${esc(g.key)}">消す</button></div></div>
+        ${g.records.slice().sort((a, b) => (order.indexOf(a.subject) + 99) % 199 - (order.indexOf(b.subject) + 99) % 199).map(r => `<div class="row tg-row">${tag(r.subject)}<span class="num">${num(r.score)}/${num(r.max)}</span><span class="muted">${esc(detail(r))}</span></div>`).join('')}</div>`).join('') || '<p class="muted">まだありません</p>'}
+      <div class="sform" id="sform" data-kind="${kind}"><h3>${editing ? `「${esc(first.testName)}」を直す` : '結果を追加'}</h3>
+        <div class="fg"><div><label>種類</label><select id="s-kind" data-act-change="score-kind"><option ${kind === '考査' ? 'selected' : ''}>考査</option><option ${kind === '模試' ? 'selected' : ''}>模試</option></select></div>
+          <div><label>テストの名前</label><input id="s-test" value="${esc(first ? first.testName : '中間テスト')}"></div>
+          <div><label>日にち</label><input id="s-date" type="date" value="${first ? first.date : today()}"></div>
+          <div><label>満点</label><input id="s-max" type="number" value="${common}"></div>
+          <div class="k-exam"><label>人数(学年など・任意)</label><input id="s-takers" type="number" value="${v(editing && editing.records.map(r => r.takers).find(x => x != null))}"></div></div>
+        ${names.map(name => { const r = rec(name) || {};
+          return `<div class="fg" style="margin-top:6px"><div><label>${esc(name)}</label><input type="number" step="0.1" data-score="${esc(name)}" placeholder="点数" value="${v(r.score)}"></div>
+          <div class="k-mock"><label>偏差値(任意)</label><input type="number" step="0.1" data-dev="${esc(name)}" value="${v(r.deviation)}"></div>
+          <div class="k-exam"><label>平均点(任意)</label><input type="number" step="0.1" data-avg="${esc(name)}" value="${v(r.average)}"></div>
+          <div class="k-exam"><label>順位(任意)</label><input type="number" data-rank="${esc(name)}" value="${v(r.rank)}"></div>
+          <div style="grid-column:span 2"><label>分野別(任意)例:二次関数 25/30, 確率 12/35</label><input data-fields="${esc(name)}" value="${esc((r.fields || []).map(f => `${f.name} ${num(f.score)}/${num(f.max)}`).join(', '))}"></div></div>`; }).join('')}
+        <p class="muted k-exam">平均点か順位を入れると、偏差値の目安を出して苦手度の計算に使います(順位があれば順位を優先)</p>
+        <div class="row" style="margin-top:10px"><button data-act="add-scores">${editing ? '直して保存' : '保存'}</button>${editing ? '<button class="secondary" data-act="score-cancel">やめる</button>' : ''}</div></div></div>`;
   }
 
   /** アカウントの部分 */
@@ -667,21 +772,43 @@
     },
     'add-scores'() {
       const max = Number($('s-max').value) || 100, date = $('s-date').value, testName = $('s-test').value.trim() || 'テスト';
+      const kind = $('s-kind').value, mock = kind === '模試', takers = Number($('s-takers').value) || null;
+      const numOrNull = (sel) => { const el = document.querySelector(sel); return el && el.value !== '' ? Number(el.value) : null; };
+      // 直すときは、同じ教科の結果を書きかえ(IDはそのまま)、点数を消した教科の結果は消す
+      const editing = state.scoreEdit ? testGroups().find(g => g.key === state.scoreEdit) : null;
+      const remaining = editing ? editing.records.slice() : [];
       let count = 0;
       document.querySelectorAll('[data-score]').forEach(inp => {
         if (inp.value === '') return;
-        const name = inp.dataset.score;
-        const dev = document.querySelector(`[data-dev="${CSS.escape(name)}"]`).value;
-        const fieldText = document.querySelector(`[data-fields="${CSS.escape(name)}"]`).value;
+        const name = inp.dataset.score, q = CSS.escape(name);
+        const fieldText = document.querySelector(`[data-fields="${q}"]`).value;
         // 「二次関数 25/30, 確率 12/35」→ 分野別の得点
         const fields = fieldText.split(/[,、\n]/).map(t => t.trim().match(/^(.+?)\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/))
           .filter(Boolean).map(m => ({ name: m[1].trim(), score: Math.min(Number(m[2]), Number(m[3])), max: Number(m[3]) })).filter(f => f.max > 0);
-        S.put('scores', S.newID(), { date, testName, subject: name, score: Math.min(Number(inp.value), max), max, deviation: dev ? Number(dev) : null, fields });
+        const old = remaining.find(r => r.subject === name);
+        if (old) remaining.splice(remaining.indexOf(old), 1);
+        // 模試は偏差値、考査は平均点・順位・人数(もう片方は消す)
+        S.put('scores', old ? old.id : S.newID(), { date, testName, subject: name, score: Math.min(Number(inp.value), max), max, kind,
+          deviation: mock ? numOrNull(`[data-dev="${q}"]`) : null, average: mock ? null : numOrNull(`[data-avg="${q}"]`),
+          rank: mock ? null : numOrNull(`[data-rank="${q}"]`), takers: mock ? null : takers, fields });
         count++;
       });
       if (!count) { alert('点数を入れてください'); return; }
+      remaining.forEach(r => S.remove('scores', r.id));
+      state.scoreEdit = null;
       L.ensureDayLog(today()); commit();
     },
+    'score-edit'(el) { state.scoreEdit = el.dataset.k; render(); $('sform').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    'score-cancel'() { state.scoreEdit = null; render(); },
+    'score-del'(el) {
+      const g = testGroups().find(x => x.key === el.dataset.k);
+      if (!g || !confirm(`「${g.first.testName}」の結果を全部消しますか?`)) return;
+      g.records.forEach(r => S.remove('scores', r.id));
+      if (state.scoreEdit === el.dataset.k) state.scoreEdit = null;
+      commit();
+    },
+    track(el) { S.put('settings', 'main', { ...L.settings(), track: el.dataset.t }); commit(); },
+    metric(el) { state.metric = el.dataset.k; render(); },
     async login() { await auth('signIn'); },
     async signup() { await auth('signUp'); },
     logout() { Auth.signOut(); render(); },
@@ -713,6 +840,8 @@
       S.all('timetable').filter(t => t.weekday === w && t.period === p).forEach(t => S.remove('timetable', t.id));
       if (el.value) S.put('timetable', S.newID(), { weekday: w, period: p, subject: el.value });
       commit();
+    } else if (el.dataset.actChange === 'score-kind') {
+      $('sform').dataset.kind = el.value;
     } else if (el.dataset.actChange === 'periods') {
       state.periods = Number(el.value); render();
     } else if (el.dataset.set) {

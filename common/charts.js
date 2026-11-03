@@ -42,18 +42,19 @@
         </div>`).join('')}</div>`;
     },
 
-    // 折れ線グラフ。series:[{label, color, points:[{x: 日付の数, y}]}]、yMax:縦の最大
-    lines(series, { height = 200, yMax = 100 } = {}) {
+    // 折れ線グラフ。series:[{label, color, points:[{x: 日付の数, y}]}]、yMin・yMax:縦の最小・最大
+    lines(series, { height = 200, yMin = 0, yMax = 100 } = {}) {
       const all = series.flatMap(s => s.points);
       if (!all.length) return '';
       const w = 600, pad = 30;
       const xs = all.map(p => p.x), minX = Math.min(...xs), maxX = Math.max(...xs);
       const sx = x => maxX === minX ? w / 2 : pad + (x - minX) / (maxX - minX) * (w - pad * 2);
-      const sy = y => height - pad - y / yMax * (height - pad * 1.5);
+      // 縦の位置 = (値 − 最小) ÷ (最大 − 最小) の割合だけ上へ
+      const sy = y => height - pad - (Math.min(yMax, Math.max(yMin, y)) - yMin) / (yMax - yMin) * (height - pad * 1.5);
       let grid = '';
       for (let g = 0; g <= 4; g++) {
-        const y = sy(yMax * g / 4);
-        grid += `<line x1="${pad}" x2="${w - pad}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="4" y="${y + 4}" class="axis">${Math.round(yMax * g / 4)}</text>`;
+        const v = yMin + (yMax - yMin) * g / 4, y = sy(v);
+        grid += `<line x1="${pad}" x2="${w - pad}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="4" y="${y + 4}" class="axis">${Math.round(v)}</text>`;
       }
       const lines = series.map(s => {
         const pts = s.points.slice().sort((a, b) => a.x - b.x);

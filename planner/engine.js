@@ -102,7 +102,53 @@
   const urgency = (days) => (days == null || days < 0) ? 1 : 1 + 2 * Math.max(0, 14 - days) / 14;
 
   /** 優先度 = (0.3 + 0.7 × 苦手度 ÷ 100) × 急ぎ度 × (授業があれば1.1) */
-  const priority = (s, hadClass) => (0.3 + 0.7 * Math.min(100, Math.max(0, s.weakness)) / 100) * urgency(s.daysToTest) * (hadClass ? 1.1 : 1);
+  /** 優先度 = (0.3 + 0.7 × 苦手度 ÷ 100) × 急ぎ度 × 授業の倍率(1.1) × 文理の倍率(理系なら数学・理科が 1.2) */
+  const priority = (s, hadClass) => (0.3 + 0.7 * Math.min(100, Math.max(0, s.weakness)) / 100) * urgency(s.daysToTest) * (hadClass ? 1.1 : 1) * (s.trackWeight || 1);
+
+  // ---- 文系・理系(Track.swift)----
+
+  const SCIENCE = ['数', '物理', '化学', '生物', '地学', '理科'];
+  const HUMANITIES = ['国語', '現代文', '古文', '漢文', '古典', '言語文化', '論理国語', '文学', '社会', '歴史', '日本史', '世界史', '地理', '公共', '政治', '倫理'];
+  const isScience = (name) => SCIENCE.some(w => name.includes(w));
+  const isHumanities = (name) => HUMANITIES.some(w => name.includes(w));
+  /** 主要教科か(理系:数学・理科・英語、文系:国語・社会・英語) */
+  function isCore(track, name) {
+    if (track === '理系') return isScience(name) || name.includes('英');
+    if (track === '文系') return isHumanities(name) || name.includes('英');
+    return false;
+  }
+  /** 計画の倍率:理系なら数学・理科を ×1.2、文系なら国語・社会を ×1.2 */
+  function trackWeight(track, name) {
+    if (track === '理系') return isScience(name) ? 1.2 : 1;
+    if (track === '文系') return isHumanities(name) ? 1.2 : 1;
+    return 1;
+  }
+
+  // ---- 考査の偏差値の目安(ScoreEstimate)----
+
+  /** 標準正規分布で上位の割合が p になる z(Abramowitz & Stegun 26.2.23) */
+  function zUpper(p) {
+    const q = Math.min(Math.max(p, 1e-6), 1 - 1e-6);
+    if (q > 0.5) return -zUpper(1 - q);
+    const t = Math.sqrt(-2 * Math.log(q));
+    return t - (2.515517 + 0.802853 * t + 0.010328 * t * t) / (1 + 1.432788 * t + 0.189269 * t * t + 0.001308 * t * t * t);
+  }
+  /**
+   * 偏差値の目安
+   * 1. 順位と人数があれば:p = (順位 − 0.5) ÷ 人数 → 偏差値 = 50 + 10 × z(上位 p)
+   * 2. 平均点だけなら:偏差値 = 50 + 10 × (点数 − 平均点) ÷ (満点 × 0.15)
+   * 3. どちらもなければ null。20〜80 におさめる
+   */
+  function estimateDeviation(score, max, average, rank, takers) {
+    let v = null;
+    if (rank != null && takers > 0 && rank >= 1 && rank <= takers) v = 50 + 10 * zUpper((rank - 0.5) / takers);
+    else if (average != null && max > 0) v = 50 + 10 * (score - average) / (max * 0.15);
+    return v == null ? null : Math.min(80, Math.max(20, v));
+  }
+  /** 苦手度に使う偏差値:模試の偏差値、なければ考査の順位・平均点から見積もった値 */
+  const effectiveDeviation = (r) => r.deviation != null ? r.deviation : estimateDeviation(r.score, r.max, r.average, r.rank, r.takers);
+  /** 模試か(種類が空なら名前に「模試」「模擬」があれば模試) */
+  const isMock = (r) => r.kind ? r.kind === '模試' : /模試|模擬/.test(r.testName || '');
 
   // ---- 1日の時間の計画(PlanEngine.swift)----
 
@@ -145,6 +191,7 @@
       parts.push(s.daysToTest === 0 ? `今日が${name}` : `${name}まで${s.daysToTest}日`);
     } else parts.push('テストはまだ先');
     if (hadClass) parts.push('今日授業があった');
+    if ((s.trackWeight || 1) > 1) parts.push('重点教科');
     return parts.join('・') + ` → 優先度${rank}位`;
   }
 
@@ -572,7 +619,7 @@
   const Engine = {
     dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
-    ability, weakness, urgency, priority, allocate, content, reason, plan, redistribute,
+    ability, weakness, urgency, priority, allocate, isCore, trackWeight, estimateDeviation, effectiveDeviation, isMock, content, reason, plan, redistribute,
     modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota, isActive,
     latest, reviewDue, todaysQueue, reviewDoneToday, weakIn, weakFields, isAchieved, streak,
     MAX_TICKETS,

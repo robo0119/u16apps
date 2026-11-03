@@ -6,8 +6,8 @@
   <title>StudyPilot | Sotaのapp</title>
   <link rel="icon" href="../icons/studyplanner.png">
   <link rel="apple-touch-icon" href="../icons/studyplanner.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261103e">
-  <script src="../common/gate.js?v=20261103e"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261103g">
+  <script src="../common/gate.js?v=20261103g"></script>
   <style>
     :root { --accent: #5b4ee0; --ok: #2f9e57; --tri: #f08a24; --ng: #e2474f; --ticket: #a35ee6; }
     .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
@@ -134,13 +134,45 @@
     .lapb-late { background: color-mix(in srgb, var(--ng) 14%, transparent); color: var(--ng); }
     .lapb-upcoming, .lapb-finished { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
     .rm-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
-    .rm-head { position: relative; height: 22px; margin: 14px 0 4px; font-size: .75rem; color: var(--muted); }
-    .rm-tick { position: absolute; transform: translateX(-2px); border-left: 1px solid var(--line); padding-left: 3px; }
-    .rm-row { margin: 6px 0 10px; }
-    .rm-name { font-size: .8rem; color: var(--muted); margin-bottom: 2px; }
-    .rm-track { position: relative; height: 18px; background: color-mix(in srgb, var(--line) 50%, transparent); border-radius: 5px; border-left: 2px solid var(--ng); }
-    .rm-bar { position: absolute; top: 0; height: 18px; border-radius: 5px; color: #fff; font-size: .7rem; font-weight: 800; padding-left: 5px; line-height: 18px; overflow: hidden; }
-    .rm-line { position: absolute; top: -3px; bottom: -3px; border-left: 1px dashed color-mix(in srgb, orange 60%, transparent); }
+    .rm-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .rm-tile { background: var(--card); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+    .rm-tile span { font-size: .8rem; color: var(--muted); }
+    .rm-tile b { font-size: 1.8rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .rm-tile small { color: var(--muted); font-weight: 700; font-size: .72rem; }
+    .rm-tile.bad b, .rm-tile.bad span { color: var(--ng); }
+    .rm-tile.run b, .rm-tile.run span { color: #3478f6; }
+    .rm-tile.soon b, .rm-tile.soon span { color: #f08a24; }
+    .rm-late { background: color-mix(in srgb, var(--ng) 7%, var(--card)); margin-top: 12px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+    .rm-dates { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .rm-dates span { white-space: nowrap; font-size: .8rem; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
+    .rm-head { position: relative; height: 54px; margin: 12px 13px 6px; font-size: .75rem; color: var(--muted); }
+    .rm-tick { position: absolute; top: 0; border-left: 1px solid var(--line); padding-left: 3px; height: 22px; font-weight: 700; white-space: nowrap; }
+    .rm-flag { position: absolute; top: 22px; transform: translateX(-2px); font-size: .85rem; }
+    .rm-todaylabel { position: absolute; top: 36px; transform: translateX(-50%); background: var(--ng); color: #fff; font-size: .62rem; font-weight: 800; padding: 0 5px; border-radius: 999px; }
+    .rm-group h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 1rem; }
+    .rm-group h3 i { width: 4px; height: 16px; border-radius: 2px; }
+    .rm-row { margin: 10px 0 12px; }
+    .rm-name { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .9rem; margin-bottom: 4px; }
+    .rm-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rm-track { position: relative; height: 22px; background: color-mix(in srgb, var(--line) 50%, transparent); border-radius: 11px; }
+    .rm-bar { position: absolute; top: 0; height: 22px; border-radius: 6px; overflow: hidden; }
+    .rm-bar i { position: absolute; left: 0; top: 0; bottom: 0; }
+    .rm-bar b { position: relative; color: #fff; font-size: .68rem; font-weight: 800; padding-left: 6px; line-height: 22px; white-space: nowrap; text-shadow: 0 0 2px rgba(0,0,0,.3); }
+    .rm-line { position: absolute; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, #f08a24 55%, transparent); z-index: 1; }
+    .rm-today { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--ng); z-index: 2; }
+    .rm-scope { font-size: .78rem; margin-top: 3px; }
+    .rm-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .78rem; }
+    .rm-legend i { display: inline-block; width: 18px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+    /* テストの結果 */
+    .test-group { border-bottom: 1px solid var(--line); padding: 10px 0; }
+    .tg-row { gap: 10px; margin: 4px 0 0 4px; font-size: .9rem; }
+    .kind-tag { font-size: .7rem; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
+    .kind-tag.exam { background: color-mix(in srgb, #f08a24 15%, transparent); color: #f08a24; }
+    .kind-tag.mock { background: color-mix(in srgb, #9b51e0 15%, transparent); color: #9b51e0; }
+    .sform { margin-top: 14px; padding-top: 6px; }
+    .sform[data-kind="模試"] .k-exam, .sform[data-kind="考査"] .k-mock { display: none; }
+    .devchip { font-size: .78rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
     @media (max-width: 520px) { .route-row { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
@@ -162,13 +194,13 @@
   <main id="view"></main>
   <footer>データはこのブラウザと、ログインしていれば Firebase(本人だけが読み書きできる場所)に保存されます。</footer>
 
-  <script src="../common/bridge.js?v=20261103e"></script>
-  <script src="../common/charts.js?v=20261103e"></script>
-  <script src="../common/firebase-config.js?v=20261103e"></script>
-  <script src="engine.js?v=20261103e"></script>
-  <script src="store.js?v=20261103e"></script>
-  <script src="../common/sync.js?v=20261103e"></script>
-  <script src="logic.js?v=20261103e"></script>
-  <script src="app.js?v=20261103e"></script>
+  <script src="../common/bridge.js?v=20261103g"></script>
+  <script src="../common/charts.js?v=20261103g"></script>
+  <script src="../common/firebase-config.js?v=20261103g"></script>
+  <script src="engine.js?v=20261103g"></script>
+  <script src="store.js?v=20261103g"></script>
+  <script src="../common/sync.js?v=20261103g"></script>
+  <script src="logic.js?v=20261103g"></script>
+  <script src="app.js?v=20261103g"></script>
 </body>
 </html>

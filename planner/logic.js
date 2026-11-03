@@ -5,7 +5,7 @@
 
   /** 生活時間などの設定(なければ iOS版と同じ初期値) */
   const DEFAULT_SETTINGS = { wake: 390, sleep: 1380, schoolStart: 500, schoolEnd: 950, commute: 20, living: 150,
-    firstPeriodStart: 520, periodLength: 50, periodBreak: 10, lunchAfter: 4, lunchLength: 45, afterLast: 15 };
+    firstPeriodStart: 520, periodLength: 50, periodBreak: 10, lunchAfter: 4, lunchLength: 45, afterLast: 15, track: '理系' };
 
   const L = {
     today: () => E.keyOf(new Date()),
@@ -39,11 +39,12 @@
     /** 教科ごとの苦手度と、次のテストまでの日数 */
     subjectStates(key) {
       const scores = S.all('scores');
+      const track = L.settings().track;
       const tests = S.all('events').filter(e => (e.kind === '定期テスト' || e.kind === '模試') && e.date >= key).sort((a, b) => a.date.localeCompare(b.date));
       return L.subjects().map(sub => {
-        const points = scores.filter(s => s.subject === sub.name).map(s => ({ date: s.date, score: s.score, max: s.max, deviation: s.deviation }));
+        const points = scores.filter(s => s.subject === sub.name).map(s => ({ date: s.date, score: s.score, max: s.max, deviation: E.effectiveDeviation(s) }));
         const next = tests.find(t => !t.subjects.length || t.subjects.includes(sub.name));
-        return { name: sub.name, weakness: E.weakness(points), daysToTest: next ? E.daysBetween(key, next.date) : null, testName: next ? next.title : null };
+        return { name: sub.name, weakness: E.weakness(points), daysToTest: next ? E.daysBetween(key, next.date) : null, testName: next ? next.title : null, trackWeight: E.trackWeight(track, sub.name) };
       });
     },
 
