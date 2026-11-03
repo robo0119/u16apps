@@ -215,7 +215,7 @@
    * 周回のロードマップ(iOS版の RoadmapView と同じ):教科ごとに、教材の「何周目を、いつからいつまでに」を横の帯で
    * - 上:遅れ・やっている周・30日以内に締切の数と、遅れている教材
    * - 帯の左はしは今日の1週間前。位置 = (その日 − 左はし) ÷ (右はし − 左はし)
-   * - 今の周は、始めから今日までを濃く。終えた周はうすく ✓
+   * - 周回は教科の色。今の周は、始めから今日までを少し暗く。終えた周はうすく ✓
    */
   function roadmapHTML() {
     const key = today();
@@ -255,8 +255,8 @@
       const a = pos(l.start), b = pos(E.addDays(l.end, 1)), w = Math.max(1.5, b - a);
       // 今の周の濃い所 = (今日 − 始め) ÷ (終わり − 始め)
       const elapsed = l.done ? 0 : Math.max(0, Math.min(100, (pos(key) - a) / w * 100));
-      return `<span class="rm-bar" title="${l.lap}周目 ${mdShort(l.start)}〜${mdShort(l.end)} ${esc(l.scope || '')}" style="left:${a}%;width:${w}%;background:color-mix(in srgb, ${c} ${l.done ? 25 : 45}%, transparent)">
-        ${elapsed > 0 ? `<i style="width:${elapsed}%;background:${c}"></i>` : ''}<b>${l.done ? '✓' : ''}${w > 9 ? `${l.lap}周目` : l.lap}</b></span>`;
+      return `<span class="rm-bar" title="${l.lap}周目 ${mdShort(l.start)}〜${mdShort(l.end)} ${esc(l.scope || '')}" style="left:${a}%;width:${w}%;background:${c};opacity:${l.done ? 0.3 : 0.9}">
+        ${elapsed > 0 ? `<i style="width:${elapsed}%;background:rgba(0,0,0,.2)"></i>` : ''}<b>${l.done ? '✓' : ''}${w > 9 ? `${l.lap}周目` : l.lap}</b></span>`;
     };
     const rows = groups.map(g => `<div class="card rm-group"><h3><i style="background:${color(g.sub)}"></i>${esc(g.sub)} <span class="muted">${g.items.length}冊</span></h3>
       ${g.items.map(m => { const st = E.lapStatus(m.laps, key); const cur = st && st.lap;
@@ -271,7 +271,7 @@
       <div class="row" style="margin:12px 0">${[[3, '3か月'], [6, '半年'], [12, '1年'], [0, '全部']].map(([n, t]) => `<button class="${months === n ? '' : 'secondary'}" style="min-height:36px;padding:4px 14px" data-act="rm-range" data-n="${n}">${t}</button>`).join('')}</div>
       ${flags.length ? `<div class="rm-dates">${flags.map(e => `<span style="color:${flagColor(e)};background:color-mix(in srgb, ${flagColor(e)} 12%, transparent)">⚑ ${mdShort(e.date)} ${esc(shortName(e))}</span>`).join('')}</div>` : ''}
       ${groups.length ? `<div class="rm-head">${ticks}${flagIcons}<span class="rm-todaylabel" style="left:${pos(key)}%">今日</span></div>${rows}` : '<div class="card"><p class="muted">この期間の周回の予定はありません</p></div>'}
-      <p class="muted rm-legend"><span><i style="background:var(--accent)"></i>今の周(濃い所がたった日数)</span><span><i style="background:color-mix(in srgb, var(--accent) 25%, transparent)"></i>終えた周</span>
+      <p class="muted rm-legend"><span><i style="background:var(--accent)"></i>周回(暗い所がたった日数)</span><span><i style="background:var(--accent);opacity:.3"></i>終えた周</span>
         <span style="color:#f08a24">⚑ 考査</span><span style="color:#3478f6">⚑ 模試</span><span style="color:#9b51e0">⚑ 英検</span><span style="color:var(--ng)">| 今日</span></p>`;
   }
 
