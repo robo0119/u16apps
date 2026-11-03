@@ -13,7 +13,7 @@
   const UNITS = ['ページ', '語', '分', '題', '回', '章'];
   const EVERY = [[1, '毎日'], [2, '2日に1回'], [3, '3日に1回'], [4, '4日に1回'], [7, '7日に1回'], [0, '自動(その他・土日)']];
   /** 出す日の表示 */
-  const everyText = (n) => n === 1 ? '毎日' : n > 1 ? `${n}日に1回` : '自動';
+  const everyText = (n, weekendOnly) => weekendOnly ? '土日だけ' : n === 1 ? '毎日' : n > 1 ? `${n}日に1回` : '自動';
   const KINDS = ['問題集', '参考書', '単語帳', '過去問', '教科書・副教材', 'ルーティーン', '映像授業'];
   /** 問題ごとに ○△× をつけるか(問題集・過去問で、総問題数が決まっているとき) */
   const usesMarks = (m) => (m.kind === '問題集' || m.kind === '過去問' || !m.kind) && m.total > 0;
@@ -83,9 +83,11 @@
 
     const items = L.todayMaterials(log);
     if (L.materials().length) {
-      html += `<div class="sec-head"><span>今日のノルマ</span><span>${items.filter(i => i.e.done > 0).length}/${items.length}</span></div>
-        <div class="card list">${items.length ? items.map(quotaRow).join('') : '<p class="muted">今日のノルマはありません</p>'}</div>
-        <p class="sec-foot">終わったら丸をタップ。8割チェックで達成です</p>`;
+      const custom = L.customEntries(log);
+      html += `<div class="sec-head"><span>今日のノルマ</span><span>${items.filter(i => i.e.done > 0).length + custom.filter(e => e.done > 0).length}/${items.length + custom.length}</span></div>
+        <div class="card list">${items.length || custom.length ? items.map(quotaRow).join('') + custom.map(customRow).join('') : '<p class="muted">今日のノルマはありません</p>'}
+          <button class="add-quota" data-act="add-open">＋ ノルマを足す</button>${state.addOpen ? addPanel(items) : ''}</div>
+        <p class="sec-foot">終わったら丸をタップ。8割チェックで達成です。× で今日は外せます</p>`;
     }
     const reviews = L.todayReviews(key);
     if (reviews.length) {
@@ -128,7 +130,34 @@
       <div class="qbody"><div class="qtop"><span class="chip-s">${esc(i.m.subject)}</span><b class="qname">${esc(i.m.name)}</b>
         ${i.e.amount > 0 ? `<span class="qamt">${i.e.amount}${esc(i.e.unit)}</span>` : ''}</div>
         <div class="qtags"><span class="rtag">${esc(shortReason(i.e.reason || ''))}</span> ${lapBadge(i.m)}</div>
-        ${i.e.unit === '単元' ? `<div class="qunit">${esc(i.e.reason)}</div>` : ''}</div></label>`;
+        ${i.e.unit === '単元' ? `<div class="qunit">${esc(i.e.reason)}</div>` : ''}</div>
+      <button class="q-remove" data-act="q-remove" data-m="${i.m.id}" title="今日は外す">×</button></label>`;
+  }
+
+  /** 自分で書いたノルマの行 */
+  function customRow(e) {
+    return `<label class="qitem ${e.done > 0 ? 'done' : ''}" style="--c:var(--accent)">
+      <input type="checkbox" class="circle" data-act="quota" data-m="${e.material}" ${e.done > 0 ? 'checked' : ''}>
+      <div class="qbody"><div class="qtop"><b class="qname">${esc(e.title)}</b>${e.amount > 0 ? `<span class="qamt">${e.amount}${esc(e.unit)}</span>` : ''}</div>
+        <div class="qtags"><span class="rtag">自分で追加</span></div></div>
+      <button class="q-remove" data-act="q-remove" data-m="${e.material}" title="今日は外す">×</button></label>`;
+  }
+
+  /** ノルマを足すパネル(教材から選ぶ/自分で書く) */
+  function addPanel(items) {
+    const inToday = new Set(items.map(i => i.m.id));
+    const mats = L.materials().filter(m => !inToday.has(m.id) && m.role !== '後回し');
+    const order = L.subjects().map(s => s.name).concat(['全教科']);
+    const subjects = [...new Set(mats.map(m => m.subject))].sort((a, b) => (order.indexOf(a) + 99) % 199 - (order.indexOf(b) + 99) % 199);
+    return `<div class="add-panel"><div class="row"><button class="${state.addMode === 'custom' ? 'secondary' : ''}" data-act="add-mode" data-mode="material">教材から選ぶ</button>
+      <button class="${state.addMode === 'custom' ? '' : 'secondary'}" data-act="add-mode" data-mode="custom">自分で書く</button></div>
+      ${state.addMode === 'custom' ? `<div class="fg" style="margin-top:8px"><div style="grid-column:1/-1"><label>やること</label><input id="cq-title" placeholder="例:スタサプ 力学"></div>
+          <div><label>量(0 = 決めない)</label><input id="cq-amount" type="number" min="0" value="0"></div>
+          <div><label>単位</label><select id="cq-unit">${['ページ', '題', '語', '分', '講', '回'].map(u => `<option>${u}</option>`).join('')}</select></div></div>
+          <button style="margin-top:10px;width:100%" data-act="add-custom">今日のノルマに足す</button>`
+        : subjects.map(sub => `<div class="muted" style="margin-top:10px;font-weight:700">${esc(sub)}</div>` + mats.filter(m => m.subject === sub).map(m =>
+          `<button class="add-item" data-act="add-material" data-m="${m.id}"><span>${esc(m.name)}<small> ${esc([everyText(m.every ?? 0, m.weekendOnly), m.amount > 0 ? m.amount + (m.unit || '') : ''].filter(Boolean).join('・'))}</small></span><b>＋</b></button>`).join('')).join('')}
+      </div>`;
   }
 
   /** 選んだ理由の短い表示(毎日・2日に1回・交互・おまかせ・土日・休みの日・単元の順) */
@@ -248,7 +277,7 @@
           <span style="width:24px;text-align:center">${ROLE_ICON[m.role] || '★'}</span>
           <div class="grow"><b>${m.routeOrder ? `<span class="muted">${m.routeOrder}</span> ` : ''}${esc(m.name)}</b> ${lapBadge(m)}
             ${m.total > 0 ? `<div class="progress" style="margin:6px 0"><i style="width:${Math.min(100, m.done / m.total * 100)}%"></i></div>` : ''}
-            <div class="muted">${[everyText(m.every ?? 0) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : '', m.role, m.kind, m.period].filter(Boolean).map(esc).join('・')}</div>
+            <div class="muted">${[everyText(m.every ?? 0, m.weekendOnly) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : '', m.role, m.kind, m.period].filter(Boolean).map(esc).join('・')}</div>
             ${m.note ? `<div class="muted" style="font-size:.85rem">${esc(m.note)}</div>` : ''}</div><span class="muted">›</span>
         </div>`).join('')}</div>`;
     });
@@ -274,7 +303,7 @@
         ${m.total > 0 ? `<div class="progress" style="margin-top:8px"><i style="width:${Math.min(100, m.done / total * 100)}%"></i></div>` : ''}
         ${ms ? `<p style="margin:10px 0 0"><b>🔥 ${ms.current}日連続</b>・最長 ${ms.longest}日</p>` : ''}
         ${m.note ? `<p class="muted" style="margin:8px 0 0">${esc(m.note)}</p>` : ''}
-        <p style="margin:10px 0 0"><b>ノルマ:</b>${esc([everyText(m.every ?? 0) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : ''].filter(Boolean).join('・'))}
+        <p style="margin:10px 0 0"><b>ノルマ:</b>${esc([everyText(m.every ?? 0, m.weekendOnly) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : ''].filter(Boolean).join('・'))}
           ${m.activeFrom || m.activeUntil ? `<span class="muted">・期間 ${m.activeFrom ? md(m.activeFrom) : ''}〜${m.activeUntil ? md(m.activeUntil) : ''}</span>` : ''}</p></div>
       ${(m.laps || []).length ? `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">周回</h2>${lapBadge(m)}</div>
         ${m.laps.slice().sort((a, b) => a.lap - b.lap).map(l => `<div class="task" style="align-items:center">
@@ -307,6 +336,7 @@
         <div><label>単位</label><select id="mf-unit">${UNITS.map(u => `<option ${u === (f.unit || 'ページ') ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
         <div><label>出す日</label><select id="mf-every">${EVERY.map(([v, t]) => `<option value="${v}" ${v === (f.every ?? 2) ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <div><label>交互のグループ名</label><input id="mf-group" value="${esc(f.group || '')}" placeholder="例:①"></div>
+        <div class="checks" style="align-self:center"><label><input type="checkbox" id="mf-weekend" ${f.weekendOnly ? 'checked' : ''}>土日だけ(休みの日も)</label></div>
         <div><label>始める日(任意)</label><input id="mf-from" type="date" value="${f.activeFrom || ''}"></div>
         <div><label>終わる日(任意)</label><input id="mf-until" type="date" value="${f.activeUntil || ''}"></div>
       </div>
@@ -325,6 +355,7 @@
     const f = state.form;
     f.subject = $('mf-subject').value.trim(); f.name = $('mf-name').value.trim(); f.role = $('mf-role').value;
     f.amount = Math.max(0, Number($('mf-amount').value) || 0); f.unit = $('mf-unit').value; f.every = Number($('mf-every').value);
+    f.weekendOnly = $('mf-weekend').checked;
     f.group = $('mf-group').value.trim(); f.activeFrom = $('mf-from').value || null; f.activeUntil = $('mf-until').value || null;
     document.querySelectorAll('#mf-laps [data-l]').forEach(inp => { f.laps[Number(inp.dataset.l)][inp.dataset.k] = inp.value; });
     f.kind = $('mf-kind').value; f.period = $('mf-period').value.trim(); f.note = $('mf-note').value.trim();
@@ -584,7 +615,7 @@
       const old = S.get('materials', id);
       S.put('materials', id, { ...(old || { total: 0, done: 0, route: [], deadline: null }),
         subject: f.subject, name: f.name, role: f.role, kind: f.kind, period: f.period, note: f.note,
-        routeOrder: old ? (old.routeOrder ?? null) : null, amount: f.amount, unit: f.unit, every: f.every, group: f.group,
+        routeOrder: old ? (old.routeOrder ?? null) : null, amount: f.amount, unit: f.unit, every: f.every, group: f.group, weekendOnly: !!f.weekendOnly,
         activeFrom: f.activeFrom, activeUntil: f.activeUntil, daily: f.every === 1,
         laps: (f.laps || []).filter(l => l.start && l.end).map((l, i) => ({ lap: i + 1, start: l.start, end: l.end < l.start ? l.start : l.end, scope: l.scope || '', done: l.done || null })),
         order: old ? old.order : L.materials().reduce((m, x) => Math.max(m, x.order || 0), -1) + 1 });
@@ -655,6 +686,16 @@
     async signup() { await auth('signUp'); },
     logout() { Auth.signOut(); render(); },
     sync() { runSync(); },
+    'add-open'() { state.addOpen = !state.addOpen; render(); },
+    'add-mode'(el) { state.addMode = el.dataset.mode; render(); },
+    'add-material'(el) { L.addToday(el.dataset.m, today()); state.addOpen = false; commit(); },
+    'add-custom'() {
+      const title = $('cq-title').value.trim();
+      if (!title) { alert('やることを書いてください'); return; }
+      L.addCustom(title, Number($('cq-amount').value) || 0, $('cq-unit').value, today());
+      state.addOpen = false; commit();
+    },
+    'q-remove'(el) { L.removeFromToday(el.dataset.m, today()); commit(); },
     help() { showHelp(); },
   };
 

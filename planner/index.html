@@ -6,8 +6,8 @@
   <title>StudyPilot | Sotaのapp</title>
   <link rel="icon" href="../icons/studyplanner.png">
   <link rel="apple-touch-icon" href="../icons/studyplanner.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261103c">
-  <script src="../common/gate.js?v=20261103c"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261103e">
+  <script src="../common/gate.js?v=20261103e"></script>
   <style>
     :root { --accent: #5b4ee0; --ok: #2f9e57; --tri: #f08a24; --ng: #e2474f; --ticket: #a35ee6; }
     .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
@@ -100,6 +100,12 @@
       main { padding-bottom: 96px; }
       footer { padding-bottom: 100px; }
     }
+    .q-remove { flex: none; background: transparent; color: var(--muted); min-height: 30px; padding: 2px 8px; font-size: 1.1rem; border-radius: 50%; }
+    .q-remove:hover { color: var(--bad); }
+    .add-quota { width: 100%; background: transparent; color: var(--accent); justify-content: flex-start; padding: 12px 0; }
+    .add-panel { border-top: 1px solid var(--line); padding: 10px 0 14px; }
+    .add-item { width: 100%; justify-content: space-between; background: var(--accent-soft); color: var(--text); margin-top: 6px; font-weight: 600; text-align: left; }
+    .add-item small { color: var(--muted); font-weight: 400; }
     /* いちばん上のカード */
     .hero { border-radius: 22px; padding: 18px 20px; color: #fff; margin-bottom: 16px; box-shadow: 0 10px 30px rgba(80, 60, 200, .25); }
     .hero-通常 { background: linear-gradient(135deg, #4a66f2, #8c54ed); }
@@ -156,13 +162,13 @@
   <main id="view"></main>
   <footer>データはこのブラウザと、ログインしていれば Firebase(本人だけが読み書きできる場所)に保存されます。</footer>
 
-  <script src="../common/bridge.js?v=20261103c"></script>
-  <script src="../common/charts.js?v=20261103c"></script>
-  <script src="../common/firebase-config.js?v=20261103c"></script>
-  <script src="engine.js?v=20261103c"></script>
-  <script src="store.js?v=20261103c"></script>
-  <script src="../common/sync.js?v=20261103c"></script>
-  <script src="logic.js?v=20261103c"></script>
-  <script src="app.js?v=20261103c"></script>
+  <script src="../common/bridge.js?v=20261103e"></script>
+  <script src="../common/charts.js?v=20261103e"></script>
+  <script src="../common/firebase-config.js?v=20261103e"></script>
+  <script src="engine.js?v=20261103e"></script>
+  <script src="store.js?v=20261103e"></script>
+  <script src="../common/sync.js?v=20261103e"></script>
+  <script src="logic.js?v=20261103e"></script>
+  <script src="app.js?v=20261103e"></script>
 </body>
 </html>

@@ -187,7 +187,8 @@
         everyDays: m.every ?? 0, group: m.group || '', amount: m.amount || 0, unit: m.unit || 'ページ',
         activeFrom: m.activeFrom || null, activeUntil: m.activeUntil || null, order: (m.routeOrder || 0) * 1000 + (m.order || 0),
         lastDone: last[m.id] || null, laps: m.laps || [],
-        pipeline: m.groupMode === '単元順' && !!m.group, units: (m.route || []).map(r => r.title), unitsDone: m.done || 0 }));
+        pipeline: m.groupMode === '単元順' && !!m.group, units: (m.route || []).map(r => r.title), unitsDone: m.done || 0,
+        weekendOnly: !!m.weekendOnly }));
       const priority = {};
       L.subjectStates(key).forEach(s => { priority[s.name] = E.priority(s, false); });
       return E.schedule(items, key, L.modeEvents(), priority);
@@ -196,7 +197,35 @@
     /** 今日の教材(選ばれた順) */
     todayMaterials(log) {
       const mats = Object.fromEntries(L.materials().map(m => [m.id, m]));
-      return log.entries.filter(e => mats[e.material]).map(e => ({ m: mats[e.material], e }));
+      return log.entries.filter(e => e.quota > 0 && mats[e.material]).map(e => ({ m: mats[e.material], e }));
+    },
+
+    /** 自分で書いたノルマ(教材IDが「custom-」で始まる。外したものは出さない) */
+    customEntries: (log) => log.entries.filter(e => e.material.startsWith('custom-') && e.quota > 0),
+
+    /** 教材を今日のノルマに足す(外していたものなら戻す) */
+    addToday(materialID, key) {
+      const log = L.ensureDayLog(key), m = S.get('materials', materialID);
+      const e = log.entries.find(x => x.material === materialID);
+      if (e) e.quota = 1;
+      else log.entries.push({ material: materialID, quota: 1, done: 0, from: m ? (m.done || 0) : 0, amount: m ? (m.amount || 0) : 0, unit: m ? (m.unit || '') : '', reason: '自分で追加' });
+      S.put('dayLogs', key, log); S.save();
+    },
+
+    /** 自分で書いたノルマを足す(例:「スタサプ 力学」2講) */
+    addCustom(title, amount, unit, key) {
+      const log = L.ensureDayLog(key);
+      log.entries.push({ material: 'custom-' + S.newID(), quota: 1, done: 0, from: 0, amount: Math.max(0, amount || 0), unit, reason: '自分で追加', title });
+      S.put('dayLogs', key, log); S.save();
+    },
+
+    /** 今日のノルマから外す(選び直しで戻ってこないように、数を0にして残す) */
+    removeFromToday(id, key) {
+      const log = L.ensureDayLog(key);
+      const e = log.entries.find(x => x.material === id);
+      if (!e) return;
+      e.quota = 0; e.done = 0;
+      S.put('dayLogs', key, log); S.save();
     },
 
     /** 今日のその教材を「やった」にする/戻す */
@@ -329,6 +358,7 @@
         if (Number.isInteger(item.every)) { m.every = Math.max(0, item.every); m.daily = item.every === 1; }
         if ('every' in item || 'group' in item) m.group = item.group || '';
         if ('every' in item || 'groupMode' in item) m.groupMode = item.groupMode || '';
+        if ('every' in item || 'weekendOnly' in item) m.weekendOnly = !!item.weekendOnly;
         if (Array.isArray(item.units)) m.route = item.units.map((t, i) => ({ title: t, from: i + 1, to: i + 1, field: '' }));
         if ('every' in item || 'from' in item) m.activeFrom = item.from || null;
         if ('every' in item || 'until' in item) m.activeUntil = item.until || null;

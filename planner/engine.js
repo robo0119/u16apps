@@ -487,7 +487,7 @@
       result.push({ id: item.id, amount: mode === '軽め' ? Math.floor((item.amount + 1) / 2) : item.amount, unit: item.unit,
         reason: mode === '軽め' ? reason + '(行事の日なので半分)' : reason });
     };
-    const isDaily = (i) => i.everyDays === 1 && !i.group;
+    const isDaily = (i) => i.everyDays === 1 && !i.group && !i.weekendOnly;
     active.filter(isDaily).forEach(i => add(i, '毎日'));
     const pipelines = {};
     active.filter(i => i.pipeline && i.group).forEach(i => { (pipelines[i.group] = pipelines[i.group] || []).push(i); });
@@ -499,14 +499,27 @@
       result.push({ id: pick.item.id, amount: 1, unit: '単元', reason: pick.reason, unitIndex: pick.unit });
       return true;
     };
+    /** 土日だけの教材を入れる(グループは前回からの日数がいちばん長い1冊。同じなら並び順)。教科ごとの数を返す */
+    const addWeekendOnly = () => {
+      const used = {}, groups = {};
+      active.filter(i => i.weekendOnly).forEach(i => { const k = i.group || '#' + i.id; (groups[k] = groups[k] || []).push(i); });
+      Object.keys(groups).sort().forEach(k => {
+        const members = groups[k];
+        const since = (i) => i.lastDone ? daysBetween(i.lastDone, day) : 9999;
+        const pick = members.slice().sort((a, b) => (since(b) - since(a)) || ((a.order || 0) - (b.order || 0)))[0];
+        add(pick, members.length > 1 ? `土日:${k}(交互)` : '土日だけ');
+        used[pick.subject] = (used[pick.subject] || 0) + 1;
+      });
+      return used;
+    };
     const wd = weekdayOf(day);
     // 休み(冬休み・祝日など):N日に1回の教材とグループの枠を全部出し、「その他」も2つ
     const allDue = mode === '休み';
     if ((wd === 1 || wd === 7) && !allDue) {
       const picks = WEEKEND_PICKS, label = '土日';
-      const used = {};
+      const used = addWeekendOnly();
       Object.keys(pipelines).sort().forEach(name => { if (addPipeline(pipelines[name])) used[pipelines[name][0].subject] = (used[pipelines[name][0].subject] || 0) + 1; });
-      const cands = active.filter(i => !isDaily(i) && !i.pipeline);
+      const cands = active.filter(i => !isDaily(i) && !i.pipeline && !i.weekendOnly);
       picks.forEach(([subject, count]) => {
         cands.filter(i => i.subject === subject && !chosen.has(i.id))
           .sort((a, b) => (schedScore(b, day, priority) - schedScore(a, day, priority)) || byOrder(a, b)).slice(0, Math.max(0, count - (used[subject] || 0)))
@@ -514,8 +527,10 @@
       });
       return result;
     }
+    // 休みの日は、土日だけの教材も入れる
+    if (allDue) addWeekendOnly();
     const slots = [];
-    const sorted = items.slice().sort(byOrder);
+    const sorted = items.slice().sort(byOrder).filter(i => !i.weekendOnly);
     const groups = {};
     sorted.filter(i => i.group).forEach(i => { (groups[i.group] = groups[i.group] || []).push(i); });
     sorted.filter(i => !i.group && i.everyDays >= 2).forEach(i => slots.push({ every: i.everyDays, members: [i], label: `${i.everyDays}日に1回` }));
@@ -535,7 +550,7 @@
       const label = allDue ? `休みの日:${slot.label}` : slot.label;
       if (slot.other) {
         for (let n = 0; n < (allDue ? 2 : 1); n++) {
-          const pool = active.filter(i => i.everyDays === 0 && !i.group && !i.pipeline && !chosen.has(i.id));
+          const pool = active.filter(i => i.everyDays === 0 && !i.group && !i.pipeline && !i.weekendOnly && !chosen.has(i.id));
           if (!pool.length) break;
           const best = pool.reduce((a, b) => schedScore(b, day, priority) > schedScore(a, day, priority) ? b : a);
           add(best, allDue ? '休みの日:その他(教科の優先度と、前回からの日数で選んだ)' : 'その他:教科の優先度と、前回からの日数で選んだ');

@@ -208,5 +208,15 @@ test('祝日(11/3)は休み、次の日は通常', () => {
   eq([E.schedule(items, '2026-11-03', []).length, E.schedule(items, '2026-11-04', []).length], [4, 2]);
 });
 
+// ---- 土日だけ(WeekendOnlyTests.swift と同じ例)----
+const we = (lr, lp) => [it('theory', '数学', 1), { ...it('ryomon', '数学', 0, { group: '土日の数学', order: 1, last: lr }), weekendOnly: true },
+  { ...it('platika', '数学', 0, { group: '土日の数学', order: 2, last: lp }), weekendOnly: true }];
+test('平日は解法のセオリーだけ', () => { eq(E.schedule(we(), d(11, 10), []).map(q => q.id), ['theory']); });
+test('土日は良問かプラチカのどちらか(前にやってから日がたっているほう)', () => {
+  const a = E.schedule(we(), d(11, 7), []).map(q => q.id); eq([a.includes('ryomon'), a.includes('platika')], [true, false]);
+  const b = E.schedule(we(d(11, 7)), d(11, 8), []).map(q => q.id); eq([b.includes('ryomon'), b.includes('platika')], [false, true]);
+});
+test('祝日も良問かプラチカが出る', () => { const c = E.schedule(we(), d(11, 3), []).map(q => q.id); eq(c.includes('ryomon') || c.includes('platika'), true); });
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);
