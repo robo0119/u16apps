@@ -196,11 +196,17 @@
   const covers = (e, subject) => !e.subjects.length || e.subjects.includes(subject);
   const inExamWindow = (day, e) => addDays(e.start, -EXAM_WINDOW) <= day && day <= e.end;
 
-  /** モード:行事の日 → 軽め、考査の14日前〜最終日 → 考査、長期休み → 休み、それ以外 → 通常 */
+  /** 日本の祝日(振替休日をふくむ。StudyMode.swift の Holidays と同じ) */
+  const HOLIDAYS = new Set(['2026-11-03', '2026-11-23', '2027-01-01', '2027-01-11', '2027-02-11', '2027-02-23', '2027-03-22',
+    '2027-04-29', '2027-05-03', '2027-05-04', '2027-05-05', '2027-07-19', '2027-08-11', '2027-09-20', '2027-09-23', '2027-10-11',
+    '2027-11-03', '2027-11-23', '2028-01-01', '2028-01-10', '2028-02-11', '2028-02-23', '2028-03-20']);
+
+  /** モード:行事の日 → 軽め、考査の14日前〜最終日 → 考査、長期休み・祝日 → 休み、それ以外 → 通常 */
   function modeOn(day, events) {
     if (events.some(e => !e.isExam && !e.isVacation && e.start <= day && day <= e.end)) return '軽め';
     if (events.some(e => e.isExam && inExamWindow(day, e))) return '考査';
     if (events.some(e => e.isVacation && e.start <= day && day <= e.end)) return '休み';
+    if (HOLIDAYS.has(day)) return '休み';
     return '通常';
   }
 
@@ -382,7 +388,6 @@
 
   const OTHER_EVERY = 2;
   const WEEKEND_PICKS = [['数学', 3], ['英語', 2], ['物理', 1], ['化学', 1]];
-  const VACATION_PICKS = [['数学', 4], ['英語', 2], ['国語', 1], ['物理', 1], ['化学', 1]];
 
   /** 単元の順に回すグループで、今日やる教材と単元を選ぶ(並び 0,1,0,2… で試し、1つ前の教材が終えた単元だけやれる) */
   function pipelinePick(members) {
@@ -495,8 +500,10 @@
       return true;
     };
     const wd = weekdayOf(day);
-    if (wd === 1 || wd === 7 || mode === '休み') {
-      const picks = mode === '休み' ? VACATION_PICKS : WEEKEND_PICKS, label = mode === '休み' ? '休み' : '土日';
+    // 休み(冬休み・祝日など):N日に1回の教材とグループの枠を全部出し、「その他」も2つ
+    const allDue = mode === '休み';
+    if ((wd === 1 || wd === 7) && !allDue) {
+      const picks = WEEKEND_PICKS, label = '土日';
       const used = {};
       Object.keys(pipelines).sort().forEach(name => { if (addPipeline(pipelines[name])) used[pipelines[name][0].subject] = (used[pipelines[name][0].subject] || 0) + 1; });
       const cands = active.filter(i => !isDaily(i) && !i.pipeline);
@@ -524,22 +531,24 @@
       const r = rank[slot.every] || 0;
       rank[slot.every] = r + 1;
       const shifted = index + r % slot.every;
-      if (shifted % slot.every !== 0) return;
+      if (!allDue && shifted % slot.every !== 0) return;
+      const label = allDue ? `休みの日:${slot.label}` : slot.label;
       if (slot.other) {
-        const pool = active.filter(i => i.everyDays === 0 && !i.group && !chosen.has(i.id));
-        if (pool.length) {
+        for (let n = 0; n < (allDue ? 2 : 1); n++) {
+          const pool = active.filter(i => i.everyDays === 0 && !i.group && !i.pipeline && !chosen.has(i.id));
+          if (!pool.length) break;
           const best = pool.reduce((a, b) => schedScore(b, day, priority) > schedScore(a, day, priority) ? b : a);
-          add(best, 'その他:教科の優先度と、前回からの日数で選んだ');
+          add(best, allDue ? '休みの日:その他(教科の優先度と、前回からの日数で選んだ)' : 'その他:教科の優先度と、前回からの日数で選んだ');
         }
       } else if (slot.members.some(i => i.pipeline)) {
         addPipeline(slot.members.filter(i => activeIDs.has(i.id)));
       } else if (slot.members.length === 1) {
-        if (activeIDs.has(slot.members[0].id)) add(slot.members[0], slot.label);
+        if (activeIDs.has(slot.members[0].id)) add(slot.members[0], label);
       } else {
         const members = slot.members.filter(i => activeIDs.has(i.id));
         if (!members.length) return;
         const turn = weekdayOccurrences(index, r % slot.every, slot.every);
-        add(members[turn % members.length], slot.label);
+        add(members[turn % members.length], label);
       }
     });
     return result;

@@ -17,7 +17,7 @@
   const KINDS = ['問題集', '参考書', '単語帳', '過去問', '教科書・副教材', 'ルーティーン', '映像授業'];
   /** 問題ごとに ○△× をつけるか(問題集・過去問で、総問題数が決まっているとき) */
   const usesMarks = (m) => (m.kind === '問題集' || m.kind === '過去問' || !m.kind) && m.total > 0;
-  const MODE_NOTE = { '通常': 'いつものペース', '考査': '考査に出る教科を多めに', '軽め': '行事の日はノルマ半分' };
+  const MODE_NOTE = { '通常': 'いつものペース', '考査': '考査に出る教科を多めに', '軽め': '行事の日はノルマ半分', '休み': '休みの日は、いつもより多めに' };
 
   // 時刻 ⇔ 「0時からの分」
   const toMin = (t) => { const [h, m] = (t || '0:0').split(':').map(Number); return h * 60 + m; };
@@ -83,9 +83,9 @@
 
     const items = L.todayMaterials(log);
     if (L.materials().length) {
-      html += `<div class="card"><h2>今日のノルマ</h2>
-        ${items.length ? items.map(quotaRow).join('') : '<p class="muted">今日のノルマはありません</p>'}
-        <p class="muted" style="margin-bottom:0">終わったら丸をタップ。8割チェックで達成です</p></div>`;
+      html += `<div class="sec-head"><span>今日のノルマ</span><span>${items.filter(i => i.e.done > 0).length}/${items.length}</span></div>
+        <div class="card list">${items.length ? items.map(quotaRow).join('') : '<p class="muted">今日のノルマはありません</p>'}</div>
+        <p class="sec-foot">終わったら丸をタップ。8割チェックで達成です</p>`;
     }
     const reviews = L.todayReviews(key);
     if (reviews.length) {
@@ -122,12 +122,13 @@
 
   /** 教材1つのノルマの行:チェック・教材名・1日の量・選んだ理由 */
   function quotaRow(i) {
-    const done = i.e.done > 0;
-    return `<label class="task ${done ? 'done' : ''}" style="margin:0;color:var(--text)">
-      <input type="checkbox" data-act="quota" data-m="${i.m.id}" ${done ? 'checked' : ''}>
-      <div style="flex:1"><div>${tag(i.m.subject)} <b class="c">${esc(i.m.name)}</b>${i.e.amount > 0 ? ` <b>${i.e.amount}${esc(i.e.unit)}</b>` : ''}</div>
-      <div style="margin-top:4px"><span class="rtag" style="color:${color(i.m.subject)};background:color-mix(in srgb, ${color(i.m.subject)} 14%, transparent)">${esc(shortReason(i.e.reason || ''))}</span> ${lapBadge(i.m)}</div>
-      ${i.e.unit === '単元' ? `<div style="font-size:.85rem">${esc(i.e.reason)}</div>` : ''}</div></label>`;
+    const done = i.e.done > 0, c = color(i.m.subject);
+    return `<label class="qitem ${done ? 'done' : ''}" style="--c:${c}">
+      <input type="checkbox" class="circle" data-act="quota" data-m="${i.m.id}" ${done ? 'checked' : ''}>
+      <div class="qbody"><div class="qtop"><span class="chip-s">${esc(i.m.subject)}</span><b class="qname">${esc(i.m.name)}</b>
+        ${i.e.amount > 0 ? `<span class="qamt">${i.e.amount}${esc(i.e.unit)}</span>` : ''}</div>
+        <div class="qtags"><span class="rtag">${esc(shortReason(i.e.reason || ''))}</span> ${lapBadge(i.m)}</div>
+        ${i.e.unit === '単元' ? `<div class="qunit">${esc(i.e.reason)}</div>` : ''}</div></label>`;
   }
 
   /** 選んだ理由の短い表示(毎日・2日に1回・交互・おまかせ・土日・休みの日・単元の順) */
@@ -511,6 +512,8 @@
   async function runSync() {
     render();
     await Sync.run(S);
+    // iPhone と別々に作った同じ教科・時間割を1つにまとめ、消した分をすぐ同期する
+    if (L.dedupe()) await Sync.run(S);
     if (!state.form) render();
   }
 

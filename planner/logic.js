@@ -39,7 +39,7 @@
     /** 教科ごとの苦手度と、次のテストまでの日数 */
     subjectStates(key) {
       const scores = S.all('scores');
-      const tests = S.all('events').filter(e => e.kind !== '行事' && e.date >= key).sort((a, b) => a.date.localeCompare(b.date));
+      const tests = S.all('events').filter(e => (e.kind === '定期テスト' || e.kind === '模試') && e.date >= key).sort((a, b) => a.date.localeCompare(b.date));
       return L.subjects().map(sub => {
         const points = scores.filter(s => s.subject === sub.name).map(s => ({ date: s.date, score: s.score, max: s.max, deviation: s.deviation }));
         const next = tests.find(t => !t.subjects.length || t.subjects.includes(sub.name));
@@ -107,13 +107,36 @@
     },
 
     /** 次のテスト */
-    nextTest: (key) => S.all('events').filter(e => e.kind !== '行事' && e.date >= key).sort((a, b) => a.date.localeCompare(b.date))[0] || null,
+    nextTest: (key) => S.all('events').filter(e => (e.kind === '定期テスト' || e.kind === '模試') && e.date >= key).sort((a, b) => a.date.localeCompare(b.date))[0] || null,
 
     // ---- 教材・○△×・ストリーク(StudyService.swift)----
 
     /** モードの判定に使う予定(定期テスト=考査、行事=軽め) */
     modeEvents: () => S.all('events').filter(e => e.kind !== '模試')
       .map(e => ({ start: e.date, end: e.date, isExam: e.kind === '定期テスト', isVacation: e.kind === '長期休み', subjects: e.kind === '定期テスト' ? (e.subjects || []) : [] })),
+
+    /**
+     * 同じ名前の教科・同じ曜日と時間目の時間割が2つ以上あれば、1つにまとめる(iPhone と別々に作ると両方残るため)
+     * 残すのは並び順がいちばん前(同じならIDの小さいほう)。消したものは同期で iPhone からも消える
+     */
+    dedupe() {
+      let changed = false;
+      const byName = {};
+      S.all('subjects').forEach(s => { (byName[s.name] = byName[s.name] || []).push(s); });
+      Object.values(byName).filter(l => l.length > 1).forEach(l => {
+        const keep = l.slice().sort((a, b) => (a.order - b.order) || (a.id < b.id ? -1 : 1))[0];
+        l.filter(s => s.id !== keep.id).forEach(s => { S.remove('subjects', s.id); changed = true; });
+      });
+      const bySlot = {};
+      S.all('timetable').forEach(t => { const k = `${t.weekday}-${t.period}`; (bySlot[k] = bySlot[k] || []).push(t); });
+      Object.values(bySlot).filter(l => l.length > 1).forEach(l => {
+        const keep = l.slice().sort((a, b) => (a.id < b.id ? -1 : 1))[0];
+        l.filter(t => t.id !== keep.id).forEach(t => { S.remove('timetable', t.id); changed = true; });
+      });
+      L.subjects().forEach((s, i) => { if (s.order !== i) { S.put('subjects', s.id, { ...s, order: i, colorIndex: i }); changed = true; } });
+      if (changed) S.save();
+      return changed;
+    },
 
     /** 教科ごとの苦手分野 */
     weakFields: () => E.weakFields(S.all('scores')),
@@ -127,6 +150,10 @@
       const events = L.modeEvents();
       let log = S.get('dayLogs', key);
       const isNew = !log;
+      // 祝日を足したなどでモードが変わったら、モードだけ直す
+      const modeNow = E.modeOn(key, events);
+      const modeChanged = log && log.mode !== modeNow;
+      if (modeChanged) log.mode = modeNow;
       if (!log) log = { id: key, date: key, mode: E.modeOn(key, events), entries: [], reviewQuota: E.todaysQueue(S.all('attempts'), key).length };
       // 前のしくみ(問題数のノルマ)で作った今日の記録は、作り直す(まだ何もしていなければ)
       const old = log.entries.some(e => !e.unit && !e.reason) && log.entries.every(e => !e.done);
@@ -138,7 +165,7 @@
         .forEach(m => mats.filter(x => x.group === m.group).forEach(x => known.add(x.id)));
       const added = L.schedule(key).filter(q => !known.has(q.id))
         .map(q => ({ material: q.id, quota: 1, done: 0, from: q.unitIndex ?? 1, amount: q.amount, unit: q.unit, reason: q.reason }));
-      if (added.length || isNew || old) {
+      if (added.length || isNew || old || modeChanged) {
         log.entries = log.entries.concat(added);
         S.put('dayLogs', key, log);
         S.save();

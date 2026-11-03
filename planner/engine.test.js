@@ -19,7 +19,7 @@ const exam = { start: d(11, 20), end: d(11, 22), isExam: true, subjects: ['数�
 const festival = { start: d(11, 10), end: d(11, 11), isExam: false, subjects: [] };
 test('考査の14日前から最終日までが考査モード', () => {
   eq(E.modeOn(d(11, 5), [exam]), '通常'); eq(E.modeOn(d(11, 6), [exam]), '考査');
-  eq(E.modeOn(d(11, 22), [exam]), '考査'); eq(E.modeOn(d(11, 23), [exam]), '通常');
+  eq(E.modeOn(d(11, 22), [exam]), '考査'); eq(E.modeOn(d(11, 23), [exam]) !== '考査', true);
 });
 test('行事の日は軽め。考査期間と重なっても軽めが優先', () => {
   eq(E.modeOn(d(11, 10), [exam, festival]), '軽め'); eq(E.modeOn(d(11, 12), [exam, festival]), '考査');
@@ -139,11 +139,11 @@ const it = (id, subject, every, o = {}) => ({ id, subject, name: id, role: o.rol
 const weekdays = (from, to) => { const out = []; for (let k = from; k <= to; k++) { const w = E.weekdayOf(d(11, k)); if (w !== 1 && w !== 7) out.push(d(11, k)); } return out; };
 test('毎日の教材は毎日、2日に1回の2つは日を分けて交互に出る', () => {
   const items = [it('daily', '英語', 1), it('a', '英語', 2, { order: 1 }), it('b', '英語', 2, { order: 2 })];
-  weekdays(2, 6).forEach(day => { const ids = E.schedule(items, day, []).map(q => q.id); eq(ids.includes('daily'), true); eq(ids.includes('a') !== ids.includes('b'), true); });
+  weekdays(9, 13).forEach(day => { const ids = E.schedule(items, day, []).map(q => q.id); eq(ids.includes('daily'), true); eq(ids.includes('a') !== ids.includes('b'), true); });
 });
 test('グループは1つの枠を交互に使う', () => {
   const items = [it('polaris', '英語', 2, { group: '①', order: 1 }), it('ultimate', '英語', 2, { group: '①', order: 2 })];
-  const seen = weekdays(2, 13).flatMap(day => E.schedule(items, day, []).map(q => q.id));
+  const seen = weekdays(9, 20).flatMap(day => E.schedule(items, day, []).map(q => q.id));
   eq(seen.includes('polaris') && seen.includes('ultimate'), true);
   eq(seen.every((x, i) => i === 0 || x !== seen[i - 1]), true);
 });
@@ -193,14 +193,19 @@ test('新標準が先に進み、リードαとエクセルが追いかける', 
   eq(log.slice(0, 4), ['shin0', 'lead0', 'shin1', 'excel0']);
 });
 test('全部終えた教材は出ない', () => { const p = E.pipelinePick(books(4, 3, 3)); eq([p.item.id, p.unit], ['lead', 3]); eq(E.pipelinePick(books(4, 4, 4)), null); });
-test('長期休みは、数学4・英語2・国語1・物理1・化学1', () => {
+test('長期休みは、N日に1回の教材が全部出る(化学は1冊)', () => {
   const winter = [{ start: '2026-12-28', end: '2026-12-28', isExam: false, isVacation: true, subjects: [] }];
   eq(E.modeOn('2026-12-28', winter), '休み');
   const items = [];
   [['数学', 5], ['英語', 3], ['国語', 2], ['物理', 1]].forEach(([s, n]) => { for (let i = 0; i < n; i++) items.push(it(s + i, s, 2, { order: i })); });
   const plan = E.schedule(items.concat(books(1, 0, 0)), '2026-12-28', winter);
   const c = (p) => plan.filter(q => q.id.startsWith(p)).length;
-  eq([c('数学'), c('英語'), c('国語'), plan.filter(q => ['shin', 'lead', 'excel'].includes(q.id)).length, plan.find(q => q.id === 'lead').unitIndex], [4, 2, 1, 1, 0]);
+  eq([c('数学'), c('英語'), c('国語'), plan.filter(q => ['shin', 'lead', 'excel'].includes(q.id)).length, plan.find(q => q.id === 'lead').unitIndex], [5, 3, 2, 1, 0]);
+});
+test('祝日(11/3)は休み、次の日は通常', () => {
+  eq([E.modeOn('2026-11-03', []), E.modeOn('2026-11-04', [])], ['休み', '通常']);
+  const items = [0, 1, 2, 3].map(i => it('m' + i, '数学', 2, { order: i }));
+  eq([E.schedule(items, '2026-11-03', []).length, E.schedule(items, '2026-11-04', []).length], [4, 2]);
 });
 
 console.log(`\n${passed}件成功、${failed}件失敗`);

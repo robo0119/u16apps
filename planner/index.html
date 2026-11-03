@@ -6,8 +6,8 @@
   <title>StudyPilot | Sotaのapp</title>
   <link rel="icon" href="../icons/studyplanner.png">
   <link rel="apple-touch-icon" href="../icons/studyplanner.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261102e">
-  <script src="../common/gate.js?v=20261102e"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261103c">
+  <script src="../common/gate.js?v=20261103c"></script>
   <style>
     :root { --accent: #5b4ee0; --ok: #2f9e57; --tri: #f08a24; --ng: #e2474f; --ticket: #a35ee6; }
     .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
@@ -66,6 +66,40 @@
     .route-row { display: grid; grid-template-columns: 1.4fr .7fr .7fr 1.2fr auto; gap: 6px; margin-bottom: 6px; }
     .notice { background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; }
     .sync-dot { font-size: .8rem; opacity: .9; }
+    /* アプリ(iOS)に合わせた見た目 */
+    :root { --bg: #f2f2f7; --card: #ffffff; --line: #e5e5ea; --muted: #6c6c70; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #000000; --card: #1c1c1e; --line: #2c2c2e; --muted: #98989f; } }
+    body { background: var(--bg); }
+    .card { box-shadow: none; border-radius: 14px; }
+    .card.list { padding: 4px 16px; }
+    .sec-head { display: flex; justify-content: space-between; color: var(--muted); font-size: .85rem; font-weight: 700; margin: 18px 6px 6px; }
+    .sec-foot { color: var(--muted); font-size: .8rem; margin: -8px 6px 16px; }
+    .qitem { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--text); margin: 0; cursor: pointer; }
+    .qitem:last-child { border-bottom: none; }
+    input.circle { appearance: none; -webkit-appearance: none; flex: none; width: 26px; height: 26px; min-height: 26px; padding: 0; margin-top: 2px; border-radius: 50%; border: 2px solid #c7c7cc; background: transparent; position: relative; transition: transform .15s; }
+    input.circle:checked { background: var(--c); border-color: var(--c); animation: popc .25s; }
+    input.circle:checked::after { content: '✓'; position: absolute; inset: 0; color: #fff; font-weight: 900; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+    @keyframes popc { 50% { transform: scale(1.25); } }
+    .qbody { flex: 1; min-width: 0; }
+    .qtop { display: flex; align-items: center; gap: 8px; }
+    .chip-s { background: var(--c); color: #fff; border-radius: 999px; padding: 1px 9px; font-size: .75rem; font-weight: 800; flex: none; }
+    .qname { font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .qamt { margin-left: auto; font-weight: 800; font-variant-numeric: tabular-nums; flex: none; }
+    .qitem.done .qname { text-decoration: line-through; opacity: .55; }
+    .qtags { margin-top: 5px; }
+    .qtags .rtag { color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+    .qunit { font-size: .85rem; margin-top: 4px; }
+    .tabs button i { font-style: normal; margin-right: 4px; }
+    .tabs .help-btn { margin-left: auto; }
+    @media (max-width: 640px) {
+      .tabs { position: fixed; top: auto; bottom: 10px; left: 10px; right: 10px; z-index: 20; justify-content: space-around; padding: 6px; border: none;
+        border-radius: 30px; background: color-mix(in srgb, var(--card) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 6px 24px rgba(0,0,0,.15); }
+      .tabs button { flex: 1; flex-direction: column; gap: 0; min-height: 50px; padding: 4px 2px; font-size: .68rem; border-radius: 24px; }
+      .tabs button i { margin: 0; font-size: 1.2rem; }
+      .tabs .help-btn { margin-left: 0; }
+      main { padding-bottom: 96px; }
+      footer { padding-bottom: 100px; }
+    }
     /* いちばん上のカード */
     .hero { border-radius: 22px; padding: 18px 20px; color: #fff; margin-bottom: 16px; box-shadow: 0 10px 30px rgba(80, 60, 200, .25); }
     .hero-通常 { background: linear-gradient(135deg, #4a66f2, #8c54ed); }
@@ -112,23 +146,23 @@
     <a href="../">Sotaのapp</a>
   </header>
   <nav class="tabs" id="tabs">
-    <button data-act="tab" data-tab="today">今日</button>
-    <button data-act="tab" data-tab="materials">教材</button>
-    <button data-act="tab" data-tab="calendar">カレンダー</button>
-    <button data-act="tab" data-tab="analysis">分析</button>
-    <button data-act="tab" data-tab="setup">登録</button>
-    <button data-act="help" style="margin-left:auto">? 使い方</button>
+    <button data-act="tab" data-tab="today"><i>☑︎</i>今日</button>
+    <button data-act="tab" data-tab="materials"><i>📚</i>教材</button>
+    <button data-act="tab" data-tab="calendar"><i>🗓</i>カレンダー</button>
+    <button data-act="tab" data-tab="analysis"><i>📈</i>分析</button>
+    <button data-act="tab" data-tab="setup"><i>✏️</i>登録</button>
+    <button data-act="help" class="help-btn"><i>?</i>使い方</button>
   </nav>
   <main id="view"></main>
   <footer>データはこのブラウザと、ログインしていれば Firebase(本人だけが読み書きできる場所)に保存されます。</footer>
 
-  <script src="../common/bridge.js?v=20261102e"></script>
-  <script src="../common/charts.js?v=20261102e"></script>
-  <script src="../common/firebase-config.js?v=20261102e"></script>
-  <script src="engine.js?v=20261102e"></script>
-  <script src="store.js?v=20261102e"></script>
-  <script src="../common/sync.js?v=20261102e"></script>
-  <script src="logic.js?v=20261102e"></script>
-  <script src="app.js?v=20261102e"></script>
+  <script src="../common/bridge.js?v=20261103c"></script>
+  <script src="../common/charts.js?v=20261103c"></script>
+  <script src="../common/firebase-config.js?v=20261103c"></script>
+  <script src="engine.js?v=20261103c"></script>
+  <script src="store.js?v=20261103c"></script>
+  <script src="../common/sync.js?v=20261103c"></script>
+  <script src="logic.js?v=20261103c"></script>
+  <script src="app.js?v=20261103c"></script>
 </body>
 </html>
