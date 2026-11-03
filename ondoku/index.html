@@ -18,6 +18,24 @@
     .miss-chip { display: inline-flex; gap: 6px; align-items: center; margin: 4px; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); font-weight: 700; cursor: pointer; border: none; min-height: 36px; }
     .mic-big { width: 84px; height: 84px; border-radius: 50%; font-size: 2rem; }
     .mic-big.on { background: var(--bad); }
+    /* シャドーイング */
+    .seg { display: flex; gap: 4px; padding: 3px; margin-top: 8px; border-radius: 10px; background: var(--line); }
+    .seg button { flex: 1; min-height: 36px; padding: 4px 6px; background: transparent; color: var(--text, inherit); font-weight: 600; }
+    .seg button.on { background: var(--card, #fff); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .sh-warn { color: #d97a00; font-weight: 700; font-size: .9rem; margin: 8px 0 0; }
+    .sh-center { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 20px 0 8px; }
+    .sh-center b { font-size: 1.2rem; color: var(--accent); }
+    .sh-circle { width: 160px; height: 160px; border-radius: 50%; display: grid; place-items: center; font-size: 4rem;
+      background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .sh-circle.speak { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+    .sh-circle.on { animation: sh-pulse 1.8s ease-in-out infinite; }
+    @keyframes sh-pulse { 50% { transform: scale(1.06); } }
+    .sh-bar { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+    .sh-bar b { width: 52px; font-size: .85rem; }
+    .sh-bar .bar-track { flex: 1; }
+    .sh-bar .bar-track div { height: 100%; transition: width .2s; }
+    /* 練習中は英文を見せない(音だけで) */
+    body.shadowing #passage, body.shadowing #library { filter: blur(7px); pointer-events: none; user-select: none; }
   </style>
 </head>
 <body>
@@ -48,6 +66,8 @@
         <div id="send"></div>
       </div>
 
+      <div class="card" id="shadow"></div>
+
       <div class="card">
         <h2>Webで音読</h2>
         <p class="muted" id="mic-note"></p>
@@ -61,9 +81,10 @@
   <script src="../common/qr.js?v=20261103e"></script>
   <script src="../common/bridge.js?v=20261103e"></script>
   <script src="../common/charts.js?v=20261103e"></script>
-  <script src="app.js?v=20261103e"></script>
+  <script src="app.js?v=20261103f"></script>
   <script src="../common/firebase-config.js?v=20261103e"></script>
   <script src="../common/sync.js?v=20261103e"></script>
-  <script src="library.js?v=20261103e"></script>
+  <script src="library.js?v=20261103f"></script>
+  <script src="shadow.js?v=20261103f"></script>
 </body>
 </html>

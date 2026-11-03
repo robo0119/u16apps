@@ -88,10 +88,12 @@
           <div class="row" style="justify-content:space-between"><div><b>${esc(p.title)}</b>
             <span class="muted">${wordCount(p.text || '')}語・${paras.length}段落${p.bestAccuracy != null ? `・最高 ${Math.round(p.bestAccuracy)}%` : ''}</span></div>
             <div class="row"><button class="secondary" data-lib="use" data-id="${p.id}" style="min-height:36px;padding:4px 12px">全文で練習</button>
+            <button class="secondary" data-lib="shadow" data-id="${p.id}" style="min-height:36px;padding:4px 12px">全文をシャドーイング</button>
             <button class="secondary" data-lib="open" data-id="${p.id}" style="min-height:36px;padding:4px 12px">${state.open === p.id ? '閉じる' : '段落'}</button>
             <button class="secondary" data-lib="edit" data-id="${p.id}" style="min-height:36px;padding:4px 12px">編集</button>
             <button class="danger" data-lib="delete" data-id="${p.id}">消す</button></div></div>
           ${state.open === p.id ? paras.map((t, i) => `<p style="margin:8px 0"><button class="secondary" data-lib="para" data-id="${p.id}" data-i="${i}" style="min-height:32px;padding:2px 10px">段落${i + 1}で練習</button>
+            <button class="secondary" data-lib="shadowpara" data-id="${p.id}" data-i="${i}" style="min-height:32px;padding:2px 10px">シャドーイング</button>
             <span class="muted">${esc(t.slice(0, 90))}${t.length > 90 ? '…' : ''}</span></p>`).join('') : ''}
         </div>`;
       });
@@ -99,12 +101,22 @@
     $('library').innerHTML = html;
   }
 
-  /** 英文の欄に入れて、練習できるようにする */
-  function usePassage(text) {
+  /** 英文の欄に入れて、練習できるようにする(target:見せる場所。シャドーイングなら英文は見せない) */
+  function usePassage(text, target) {
     const box = $('passage');
     box.value = text;
     box.dispatchEvent(new Event('input'));
-    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $(target || 'passage').scrollIntoView({ behavior: 'smooth', block: target ? 'start' : 'center' });
+  }
+
+  /** 練習の結果を残す(iOS版の record と同じ):その英文(全文か段落)を持つ文章の、最後に練習した日・最高の正確さ */
+  function record(text, accuracy) {
+    const norm = (t) => t.replace(/\s+/g, ' ').trim();
+    const target = norm(text);
+    const p = Store.all('passages').find(x => norm(x.text || '') === target || paragraphs(x.text || '').some(t => norm(t) === target));
+    if (!p) return;
+    Store.put('passages', p.id, { ...p, lastPracticed: Date.now(), bestAccuracy: Math.max(p.bestAccuracy ?? 0, accuracy) });
+    commit();
   }
 
   /** 保存して同期する */
@@ -141,6 +153,8 @@
     open(el) { state.open = state.open === el.dataset.id ? null : el.dataset.id; render(); },
     use(el) { usePassage(Store.get('passages', el.dataset.id).text); },
     para(el) { usePassage(paragraphs(Store.get('passages', el.dataset.id).text)[Number(el.dataset.i)]); },
+    shadow(el) { usePassage(Store.get('passages', el.dataset.id).text, 'shadow'); },
+    shadowpara(el) { usePassage(paragraphs(Store.get('passages', el.dataset.id).text)[Number(el.dataset.i)], 'shadow'); },
   };
 
   document.addEventListener('click', (ev) => {
@@ -150,7 +164,7 @@
     ACTIONS[el.dataset.lib](el);
   });
 
-  window.RecitoLibrary = { paragraphs };
+  window.RecitoLibrary = { paragraphs, record };
   render();
   if (Auth.user) ACTIONS.sync();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Auth.user && !state.editing) ACTIONS.sync(); });

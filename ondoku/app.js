@@ -33,12 +33,13 @@
     const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
     for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
       dp[i][j] = ref[i].norm === hyp[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    const ok = new Array(n).fill(false);
+    // hyp[i] = お手本の i 語目に対応した、音読の何語目か(なければ -1。シャドーイングの遅れに使う)
+    const pair = new Array(n).fill(-1);
     for (let i = 0, j = 0; i < n && j < m;) {
-      if (ref[i].norm === hyp[j]) { ok[i] = true; i++; j++; }
+      if (ref[i].norm === hyp[j]) { pair[i] = j; i++; j++; }
       else if (dp[i][j + 1] >= dp[i + 1][j]) j++; else i++;
     }
-    return ref.map((t, i) => ({ ...t, ok: ok[i] }));
+    return ref.map((t, i) => ({ ...t, ok: pair[i] >= 0, hyp: pair[i] }));
   }
 
   // ---- 上達レポート ----
@@ -133,7 +134,7 @@
   }
 
   // テストで使えるように、計算の部分を外から呼べるようにしておく
-  window.OndokuWeb = { align };
+  window.OndokuWeb = { align, tokenize, speak };
 
   (async () => {
     const payload = Bridge.hashPayload();
