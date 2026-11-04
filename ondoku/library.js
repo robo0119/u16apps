@@ -101,12 +101,9 @@
     $('library').innerHTML = html;
   }
 
-  /** 英文の欄に入れて、練習できるようにする(target:見せる場所。シャドーイングなら英文は見せない) */
-  function usePassage(text, target) {
-    const box = $('passage');
-    box.value = text;
-    box.dispatchEvent(new Event('input'));
-    $(target || 'passage').scrollIntoView({ behavior: 'smooth', block: target ? 'start' : 'center' });
+  /** 練習タブの英文に入れる(mode:'read' か 'shadow'。シャドーイングは英文を見せずに始める) */
+  function usePassage(text, mode) {
+    window.OndokuWeb.usePassage(text, mode);
   }
 
   /** 練習の結果を残す(iOS版の record と同じ):その英文(全文か段落)を持つ文章の、最後に練習した日・最高の正確さ */
@@ -151,8 +148,8 @@
     },
     delete(el) { if (!confirm('この文章を消しますか?(iPhoneからも消えます)')) return; Store.remove('passages', el.dataset.id); commit(); },
     open(el) { state.open = state.open === el.dataset.id ? null : el.dataset.id; render(); },
-    use(el) { usePassage(Store.get('passages', el.dataset.id).text); },
-    para(el) { usePassage(paragraphs(Store.get('passages', el.dataset.id).text)[Number(el.dataset.i)]); },
+    use(el) { usePassage(Store.get('passages', el.dataset.id).text, 'read'); },
+    para(el) { usePassage(paragraphs(Store.get('passages', el.dataset.id).text)[Number(el.dataset.i)], 'read'); },
     shadow(el) { usePassage(Store.get('passages', el.dataset.id).text, 'shadow'); },
     shadowpara(el) { usePassage(paragraphs(Store.get('passages', el.dataset.id).text)[Number(el.dataset.i)], 'shadow'); },
   };

@@ -51,6 +51,7 @@
     Object.assign(state, { result: null, modelCount: 0, modelTimes: new Array(state.total).fill(null), spoken: '', hypTimes: [] });
     keptText = '';
     document.body.classList.add('shadowing');
+    $('result').innerHTML = '';
     if (state.mode === 'repeat') {
       state.phase = 'listening';
       playModel(myTurn, false, () => beginSpeaking(myTurn));
@@ -175,8 +176,11 @@
     state.result = score(state.passage, state.spoken, state.hypTimes, state.mode === 'shadow' && !state.audioURL ? state.modelTimes : []);
     state.phase = 'done';
     document.body.classList.remove('shadowing');
-    if (window.RecitoLibrary && state.result.words.length) RecitoLibrary.record(state.passage, state.result.acc);
+    // 結果は練習タブの共通の表示に出し、記録に残す(リピート・シャドーイングとも「シャドーイング」として)
+    OndokuWeb.record(state.result, 'シャドーイング');
     render();
+    $('result').innerHTML = OndokuWeb.resultHTML(state.result, { mode: state.mode, prev: OndokuWeb.previousAccuracy(state.passage) });
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // ---- 採点(アプリの WordAligner・ReadingAnalyzer と同じ式)----
@@ -190,26 +194,24 @@
    *   (Web は聞き取りの知らせが少し遅れて届くので、目安)
    */
   function score(passage, spoken, hypTimes, modelTimes) {
-    const words = align(passage, spoken).map(w => ({ ...w, start: w.ok ? hypTimes[w.hyp] : null }));
-    const read = words.filter(w => w.ok).length;
     const times = hypTimes.filter(t => t != null);
     let seconds = times.length ? times[times.length - 1] - times[0] : 0;
     if (seconds <= 1) seconds = (Date.now() - state.recStart) / 1000;
-    const sentences = [];
-    let cur = [];
-    words.forEach((w, i) => {
-      cur.push({ ...w, i });
-      if (/[.!?]$/.test(w.display.replace(/["'”’)]+$/, ''))) { sentences.push(cur); cur = []; }
+    const r = OndokuWeb.makeResult(passage, spoken, seconds);
+    // 文ごとの遅れ:その文の単語ごとに(自分が言った時刻 − お手本が言い始めた時刻)を出して平均
+    let k = 0;
+    r.sentences.forEach(sent => {
+      const n = OndokuWeb.tokenize(sent.text).length, diffs = [];
+      for (let i = k; i < k + n; i++) {
+        const w = r.words[i];
+        if (w && w.ok && hypTimes[w.hyp] != null && modelTimes[i] != null) diffs.push(hypTimes[w.hyp] - modelTimes[i]);
+      }
+      sent.lag = diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : null;
+      k += n;
     });
-    if (cur.length) sentences.push(cur);
-    const sents = sentences.map(ws => {
-      const diffs = ws.filter(w => w.start != null && modelTimes[w.i] != null).map(w => w.start - modelTimes[w.i]);
-      return { text: ws.map(w => w.display).join(' '), acc: ws.filter(w => w.ok).length / ws.length * 100,
-               lag: diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : null };
-    });
-    const lags = sents.map(s => s.lag).filter(x => x != null);
-    return { words, read, acc: words.length ? read / words.length * 100 : 0, wpm: seconds > 1 ? read / (seconds / 60) : 0,
-             seconds, sentences: sents, lag: lags.length ? lags.reduce((a, b) => a + b, 0) / lags.length : null };
+    const lags = r.sentences.map(x => x.lag).filter(x => x != null);
+    r.lag = lags.length ? lags.reduce((a, b) => a + b, 0) / lags.length : null;
+    return r;
   }
 
   // ---- 画面 ----
@@ -240,7 +242,7 @@
     if (!Recognition || !('speechSynthesis' in window)) { box.innerHTML = '<h2>シャドーイング</h2><p class="muted">このブラウザは声の入力に非対応(Chrome・Edge・Safari で使えます)</p>'; return; }
     const run = running();
     const seg = (act, items, cur) => `<div class="seg">${items.map(([v, t]) => `<button data-sh="${act}" data-v="${v}" class="${String(v) === String(cur) ? 'on' : ''}">${t}</button>`).join('')}</div>`;
-    let html = `<h2>シャドーイング</h2>`;
+    let html = `<p class="muted" style="margin:0">英文を見ずに、お手本の音だけを聞いて言います。リピート = 聞いてからまねる、シャドーイング = 少し遅れて同時に言う</p>`;
     if (!run) {
       html += seg('mode', [['repeat', 'リピート'], ['shadow', 'シャドーイング']], state.mode);
       html += seg('rate', RATES.map(r => [r, `${r}倍`]), state.rate);
@@ -255,29 +257,9 @@
     if (state.error) html += `<p class="bad">${esc(state.error)}</p>`;
     html += '<div class="row" style="justify-content:center;margin-top:12px">' + (run
       ? `<button class="secondary" data-sh="cancel">✕ やめる</button>${state.phase === 'speaking' ? '<button data-sh="finish">✓ 終わる</button>' : ''}`
-      : `<button data-sh="start">▶ スタート</button>`) + '</div>';
-    if (state.phase === 'done' && state.result) html += resultHTML(state.result);
+      : `<button data-sh="start">${state.phase === 'done' ? '↺ もう一度' : '▶ スタート'}</button>`) + '</div>';
     box.innerHTML = html;
     renderProgress();
-  }
-
-  /** 結果:円グラフ・速さ・遅れ・単語の色分け・文ごとの表 */
-  function resultHTML(r) {
-    if (!r.words.length || !state.spoken.trim()) return '<p class="warn">聞き取れませんでした</p>';
-    const grade = r.acc >= 95 ? 'Excellent!' : r.acc >= 85 ? 'Great!' : r.acc >= 70 ? 'Good' : 'Keep going';
-    const lagText = (x) => x == null ? '—' : `${x >= 0 ? '' : '−'}${Math.abs(x).toFixed(1)}秒`;
-    return `<div class="grid" style="align-items:center;margin-top:16px">
-        <div>${Charts.donut([{ label: 'ok', value: r.read, color: '#22994f' }, { label: 'miss', value: r.words.length - r.read, color: '#e2474f' }], { center: `${Math.round(r.acc)}%`, sub: '正確さ' })}</div>
-        <div><h3 style="margin:0 0 8px;color:${r.acc >= 85 ? 'var(--good)' : r.acc >= 70 ? 'var(--accent)' : 'var(--bad)'}">${grade}</h3>
-          <div class="stats"><div class="stat"><b>${Math.round(r.wpm)}</b><span>語/分(速さ)</span></div>
-          <div class="stat"><b>${r.words.length - r.read}</b><span>語 まだ</span></div>
-          ${state.mode === 'shadow' && r.lag != null ? `<div class="stat"><b>${lagText(r.lag)}</b><span>お手本からの遅れ(目安)</span></div>` : ''}</div></div>
-      </div>
-      <p class="muted" style="margin-top:12px">赤をタップで発音 <button class="secondary" data-sh="hear" style="min-height:32px;padding:2px 10px">🔊 全文</button></p>
-      <p class="words">${r.words.map((w, i) => w.ok ? `<span class="w-ok">${esc(w.display)}</span>` : `<span class="w-miss" data-sh="word" data-i="${i}">${esc(w.display)}</span>`).join(' ')}</p>
-      ${r.sentences.length > 1 ? `<table><tr><th>文</th><th>正確さ</th>${state.mode === 'shadow' && r.lag != null ? '<th>遅れ</th>' : ''}</tr>
-        ${r.sentences.map(s => `<tr><td>${esc(s.text.length > 60 ? s.text.slice(0, 60) + '…' : s.text)}</td><td class="${s.acc >= 85 ? 'good' : s.acc < 70 ? 'bad' : ''}">${Math.round(s.acc)}%</td>${state.mode === 'shadow' && r.lag != null ? `<td>${lagText(s.lag)}</td>` : ''}</tr>`).join('')}</table>` : ''}
-      <div class="row" style="justify-content:center;margin-top:12px"><button class="secondary" data-sh="start">↺ もう一度</button></div>`;
   }
 
   const ACTIONS = {
@@ -287,8 +269,6 @@
     start() { start(); },
     cancel() { cancel(); },
     finish() { finish(state.turn); },
-    hear() { speak(state.result.words.map(w => w.display).join(' ')); },
-    word(el) { speak(state.result.words[Number(el.dataset.i)].norm); },
   };
 
   document.addEventListener('click', (ev) => {
