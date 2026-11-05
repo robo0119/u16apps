@@ -616,9 +616,95 @@
     return result;
   }
 
+  // ---- おすすめの参考書と予想ロードマップ(BookAdvisor.swift と同じ計算)----
+
+  /** 成績がない教科は、この偏差値(ふつう)として考える */
+  const UNKNOWN_DEVIATION = 55;
+
+  /**
+   * 今の偏差値の目安:新しい順に最大3回を、重み 3・2・1 で平均
+   * 偏差値がわかればその値、点数だけなら 35 + 得点率 × 0.3。テストがなければ null
+   */
+  function bookDeviation(points) {
+    const recent = points.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+    if (!recent.length) return null;
+    const w = [3, 2, 1];
+    let total = 0, sum = 0;
+    recent.forEach((p, i) => { const rate = p.max > 0 ? p.score / p.max * 100 : 0; total += (p.deviation != null ? p.deviation : 35 + rate * 0.3) * w[i]; sum += w[i]; });
+    return total / sum;
+  }
+
+  /** 教材の名前をくらべやすくする(空白を取り、全角英数を半角に、小文字に) */
+  const simplifyName = (t) => (t || '').replace(/[\s　]/g, '').replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).toLowerCase();
+
+  /** 持っている教材の中にある本か(同じ教科で、教材の名前に match の言葉が入っている) */
+  const ownsBook = (book, owned) => owned.some(o => o.subject === book.subject && book.match.some(m => simplifyName(o.name).includes(simplifyName(m))));
+
+  /**
+   * その教科でおすすめの本(多くて limit 冊、分野が重ならないように)
+   * 点数 = 10 − |本の真ん中 − (今 + 3)| + 持っている本の次なら 4 + 苦手分野に合えば 5
+   *        − 難しすぎる(本の下 > 今 + 6)6 − やさしすぎる(本の上 < 今 − 2)4
+   * 「今やる」= 本の下 ≦ 今 + 2、それ以外は「次に」
+   */
+  function adviseBooks(subject, deviation, weakFields, owned, catalog, limit = 3) {
+    const current = deviation != null ? deviation : UNKNOWN_DEVIATION, target = current + 3;
+    const mine = catalog.filter(b => b.subject === subject && ownsBook(b, owned));
+    const scored = catalog.filter(b => b.subject === subject && !ownsBook(b, owned)).map(book => {
+      let score = 10 - Math.abs((book.devLo + book.devHi) / 2 - target);
+      const reasons = [`偏差値 ${Math.round(book.devLo)}〜${Math.round(book.devHi)} 向け(今の目安 ${Math.round(current)})`];
+      const from = mine.find(m => m.next.includes(book.id));
+      if (from) { score += 4; reasons.push(`持っている「${from.name}」の次`); }
+      const hit = weakFields.find(w => book.tags.some(t => w.includes(t) || t.includes(w)));
+      if (hit) { score += 5; reasons.push(`苦手な「${hit}」`); }
+      if (book.devLo > current + 6) score -= 6;
+      if (book.devHi < current - 2) score -= 4;
+      return { book, kind: book.devLo <= current + 2 ? '今やる' : '次に', reasons, score };
+    }).sort((a, b) => b.score - a.score || a.book.level - b.book.level);
+    const result = [], areas = new Set();
+    for (const a of scored) {
+      if (a.score <= 0 || areas.has(a.book.area)) continue;
+      result.push(a); areas.add(a.book.area);
+      if (result.length === limit) break;
+    }
+    return result;
+  }
+
+  /**
+   * 予想ロードマップ:今の本 → おすすめの本 → … と目標の偏差値まで(最大 maxSteps 段)
+   * 1冊の期間 = 1周の週 × 1.5、仕上げたときの目安 = min(本の上, max(今 + 2, 本の真ん中))
+   */
+  function bookRoadmap(subject, deviation, goal, weakFields, owned, catalog, startKey, maxSteps = 4) {
+    let current = deviation != null ? deviation : UNKNOWN_DEVIATION, date = startKey;
+    const steps = [], used = new Set();
+    const add = (book, isOwned) => {
+      const end = addDays(date, Math.round(book.weeks * 1.5 * 7));
+      const after = Math.min(book.devHi, Math.max(current + 2, (book.devLo + book.devHi) / 2));
+      steps.push({ book, start: date, end, deviationAfter: after, owned: isOwned });
+      used.add(book.id); current = Math.max(current, after); date = end;
+    };
+    const mineNow = catalog.filter(b => b.subject === subject && ownsBook(b, owned) && b.devHi > current && b.devLo <= current + 4)
+      .sort((a, b) => b.level - a.level || b.devHi - a.devHi);
+    if (mineNow.length) add(mineNow[0], true);
+    while (steps.length < maxSteps && current < goal) {
+      const left = catalog.filter(b => !used.has(b.id));
+      const asOwned = owned.concat(steps.map(s => ({ subject: s.book.subject, name: s.book.match[0] || s.book.name })));
+      const best = adviseBooks(subject, current, weakFields, asOwned, left, 1)[0];
+      if (!best || best.book.devHi <= current) break;
+      add(best.book, false);
+    }
+    return steps;
+  }
+
+  /** プロフィールの「苦手:現代文、確率」から、苦手な分野の言葉を取り出す */
+  const weakWordsFromProfile = (profile) => (profile || '').split('\n').flatMap(line => {
+    const m = line.match(/苦手[:：](.*)$/);
+    return m ? m[1].split(/[、,・ ]/).filter(Boolean) : [];
+  });
+
   const Engine = {
     dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
+    bookDeviation, ownsBook, adviseBooks, bookRoadmap, weakWordsFromProfile, UNKNOWN_DEVIATION,
     ability, weakness, urgency, priority, allocate, isCore, trackWeight, estimateDeviation, effectiveDeviation, isMock, content, reason, plan, redistribute,
     modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota, isActive,
     latest, reviewDue, todaysQueue, reviewDoneToday, weakIn, weakFields, isAchieved, streak,

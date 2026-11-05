@@ -232,5 +232,21 @@ test('理系は数学・理科が1.2倍、主要教科は数学・理科・英�
   eq(E.priority({ weakness: 50, trackWeight: 1.2 }, false) > E.priority({ weakness: 50 }, false), true);
 });
 
+// ---- おすすめの参考書(BookAdvisor.swift と同じ)----
+const CATALOG = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'catalog.json'), 'utf8')).books;
+const OWNED = [{ subject: '物理', name: '良問の風' }, { subject: '数学', name: 'Focus Gold 数学IIB' }, { subject: '数学', name: 'チャート式 数学IA' }, { subject: '化学', name: '化学の新標準問題集' }, { subject: '英語', name: 'ターゲット1900' }];
+test('一覧の次の本の id はすべて一覧にある', () => { const ids = new Set(CATALOG.map(b => b.id)); eq(CATALOG.every(b => b.next.every(n => ids.has(n))), true); eq(ids.size, CATALOG.length); });
+test('偏差値の目安 3:2:1、点数だけなら 35 + 得点率 × 0.3', () => {
+  eq(Math.round(E.bookDeviation([{ date: '2026-01-03', score: 80, max: 100, deviation: 60 }, { date: '2026-01-02', score: 80, max: 100 }, { date: '2026-01-01', score: 50, max: 100, deviation: 50 }]) * 1000) / 1000, 58);
+});
+test('物理:良問の風の次をすすめる(iOS版と同じ)', () => { const a = E.adviseBooks('物理', 64, [], OWNED, CATALOG); eq(['p-meimon', 'p-juyo'].includes(a[0].book.id), true); eq(a.some(x => x.book.id === 'p-ryomon'), false); });
+test('数学:苦手が確率なら確率の本', () => { const a = E.adviseBooks('数学', 58, ['確率'], OWNED, CATALOG); eq(a.some(x => x.book.id === 'm-kakuritsu'), true); });
+test('予想ロードマップ:今の本から、日付は続き、目標まで', () => {
+  const r = E.bookRoadmap('物理', 60, 70, [], OWNED, CATALOG, '1970-01-01');
+  eq(r[0].book.id, 'p-ryomon'); eq(r[0].end, E.addDays('1970-01-01', 84));
+  eq(r.every((s, i) => i === 0 || s.start === r[i - 1].end), true); eq(r[r.length - 1].deviationAfter >= 67, true);
+});
+test('プロフィールの苦手', () => eq(E.weakWordsFromProfile('高校1年\n苦手:現代文、確率'), ['現代文', '確率']));
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);
