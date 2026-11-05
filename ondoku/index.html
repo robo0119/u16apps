@@ -137,6 +137,22 @@
     .ip-compare, .ip-serif { font-family: var(--serif); font-size: 1.3rem; line-height: 1.9; }
     .ip-serif { font-size: 1rem; }
     .big-arrow { font-size: 1.4rem; min-width: 52px; }
+    .ip-toggles { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .ip-toggle { background: transparent; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); min-height: 34px; padding: 2px 12px; border-radius: 999px; font-size: .85rem; font-weight: 700; }
+    .ip-toggle.on { background: var(--accent-soft); }
+    .ip-wrap { position: relative; }
+    .ip-wrap.with-arrows { padding-top: 26px; }
+    .ip-wrap.with-arrows .ip-words { line-height: 1; row-gap: 34px; }
+    .ip-arrows { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+    .ip-words { display: flex; flex-wrap: wrap; column-gap: 10px; row-gap: 16px; line-height: 1.2; }
+    .iw { display: inline-flex; flex-direction: column; align-items: center; }
+    .iw-sub { display: flex; gap: 3px; align-items: center; min-height: 18px; margin-top: 3px; font-family: system-ui, sans-serif; }
+    .iw-sub small { font-size: .62rem; color: var(--muted); font-weight: 600; }
+    .iw-to { font-family: system-ui, sans-serif; font-size: .62rem; font-weight: 800; color: #9b51e0; }
+    .role { display: inline-block; min-width: 18px; text-align: center; font-family: system-ui, sans-serif; font-size: .72rem; font-weight: 900; color: #fff; border-radius: 4px; padding: 0 3px; }
+    .role-S { background: #3478f6; } .role-V { background: #e2474f; } .role-O { background: #22994f; } .role-C { background: #f08a24; } .role-M { background: #9b51e0; }
+    .ip-detail th { width: 6.5em; color: var(--muted); font-weight: 700; vertical-align: top; }
+    .ip-word { font-family: var(--serif); font-size: 2.2rem; color: var(--accent); }
     /* チャレンジ(文字とボタンは大きく) */
     .ch-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
     .ch-head h2 { margin: 0; color: var(--accent); font-size: 1.3rem; }
@@ -287,7 +303,7 @@
   <script src="library.js?v=20261105b"></script>
   <script src="app.js?v=20261105b"></script>
   <script src="shadow.js?v=20261105b"></script>
-  <script src="interpret.js?v=20261105b"></script>
+  <script src="interpret.js?v=20261105c"></script>
   <script src="challenge.js?v=20261105b"></script>
 </body>
 </html>

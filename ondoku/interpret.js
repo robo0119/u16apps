@@ -28,6 +28,20 @@
   const AUXILIARIES = set("am is are was were be been being do does did have has had will would can could shall should may might must don't doesn't didn't can't won't isn't aren't wasn't weren't couldn't shouldn't wouldn't haven't hasn't i'm it's");
   /** 主語になる代名詞 */
   const SUBJECTS = set('i you he she it we they');
+  /** 副詞として使う単語(時・場所・頻度・程度) */
+  const ADVERB_WORDS = set('yesterday today tomorrow tonight now then here there always often never sometimes usually also very too just still already not again soon really even only out away back aloud together abroad home');
+  /** 程度の副詞(形容詞・副詞をくわしくする) */
+  const DEGREE_ADVERBS = set('very too so really quite pretty extremely rather more most less much');
+  /** 動詞のかたまりの間に入る副詞 */
+  const MID_VERB_ADVERBS = set('not never always also just still already often usually really even only sometimes soon');
+  /** よく使う形容詞(つづりからは形容詞とわからないもの) */
+  const COMMON_ADJECTIVES = set('big small good bad new old great long short little young high low large right wrong happy sad easy hard nice kind free full true sure able hot cold warm cool fast slow early late black white red blue green yellow same different important interesting beautiful difficult steady clear real strong busy rich poor afraid glad ready tired favorite unique fuzzy bitter slippery loud quiet');
+  /** 名詞節を始める語 */
+  const NOUN_CLAUSE_STARTERS = set('that what how why whether who whom which');
+  /** うしろに「目的語 + 補語」をとる動詞 */
+  const COMPLEX_VERBS = set('make makes made call calls called name names named find finds found keep keeps kept leave leaves left consider considers considered think thinks thought');
+  /** うしろに補語をとる動詞 */
+  const LINKING_VERBS = set('am is are was were be been being become becomes became seem seems seemed look looks looked feel feels sound sounds get gets got remain remains stay stays turn turns grow grows grew appear appears');
   /** うしろに that 節をとりやすい動詞・形容詞 */
   const THAT_TAKERS = set('think thinks thought know knows knew say says said believe believes believed hope hopes hoped feel feels felt find finds found show shows showed realize realized suggest suggests suggested mean means meant sure afraid glad true clear fact idea news is was are were learn learned notice noticed agree agreed explain explained');
 
@@ -43,6 +57,8 @@
   /** 表にある単語の品詞(なければ null) */
   function override(w) {
     if (w === 'to') return 'to';
+    if (ADVERB_WORDS.has(w)) return 'adv';
+    if (COMMON_ADJECTIVES.has(w)) return 'adj';
     if (AUXILIARIES.has(w)) return 'verb';
     if (PREPOSITIONS.has(w)) return 'prep';
     if (SUBORDINATORS.has(w) || COORDINATORS.has(w)) return 'conj';
@@ -58,7 +74,7 @@
    * 主語の代名詞・to・助動詞のすぐあと → 動詞、be のあとの -ing/-ed や -ous・-ful … → 形容詞、-ly → 副詞、-ing/-ed → 動詞、それ以外 → 名詞
    */
   function guess(w, prev) {
-    if (prev && (SUBJECTS.has(prev) || prev === 'to' || (AUXILIARIES.has(prev) && !['is', 'are', 'was', 'were', 'am', 'be', 'been', 'being'].includes(prev)))) return 'verb';
+    if (prev && (SUBJECTS.has(prev) || prev === 'to' || MID_VERB_ADVERBS.has(prev) || (AUXILIARIES.has(prev) && !['is', 'are', 'was', 'were', 'am', 'be', 'been', 'being'].includes(prev)))) return 'verb';
     if (prev && ['is', 'are', 'was', 'were', 'am', 'be', 'been', 'very', 'so', 'too'].includes(prev) && /(ing|ed)$/.test(w)) return 'adj';
     if (/(ous|ful|ive|able|ible|al|ic|less)$/.test(w) && w.length > 4) return 'adj';
     if (/ly$/.test(w) && w.length > 3) return 'adv';
@@ -102,7 +118,7 @@
       let sawVerb = false;
       for (let j = i + 1; j < n; j++) {
         if (stopAtSecondVerb && tags[j] === 'verb') {
-          const groupContinues = tags[j - 1] === 'verb' || tags[j - 1] === 'to' || (tags[j - 1] === 'adv' && j >= 2 && tags[j - 2] === 'verb');
+          const groupContinues = tags[j - 1] === 'verb' || tags[j - 1] === 'to' || (MID_VERB_ADVERBS.has(w[j - 1]) && j >= 2 && tags[j - 2] === 'verb');
           if (sawVerb && !groupContinues) return j - 1;
           sawVerb = true;
         }
@@ -151,6 +167,144 @@
       }
     }
     return normalize(spans);
+  }
+
+
+  // ---------------- 品詞(日本語)・文の要素(SVOC)・修飾(BracketRules.analyze と同じ) ----------------
+
+  /** 要素の説明 */
+  const ROLE_MEANING = { S: '主語:文の主人公(〜は・〜が)', V: '動詞:主語の動作や状態(〜する・〜である)', O: '目的語:動作の相手(〜を・〜に)',
+    C: '補語:主語や目的語がどんなものか・どんな様子か', M: '修飾語:ほかの語をくわしくする' };
+
+  /** 品詞の日本語の名前 */
+  function partOfSpeech(words, tags, i) {
+    const w = bare(words[i]), next = i + 1 < words.length ? tags[i + 1] : null;
+    if (w === 'to') return next === 'verb' ? 'to不定詞の to' : '前置詞';
+    if (AUXILIARIES.has(w) && next === 'verb') return '助動詞';
+    if (['a', 'an', 'the'].includes(w)) return '冠詞';
+    if (['which', 'who', 'whom', 'whose'].includes(w) && i > 0 && tags[i - 1] === 'noun') return '関係代名詞';
+    if (['what', 'how', 'why'].includes(w)) return '疑問詞';
+    return { noun: '名詞', pron: '代名詞', verb: '動詞', adj: '形容詞', adv: '副詞', det: '限定詞(名詞の前に付く語)', prep: '前置詞',
+      conj: SUBORDINATORS.has(w) ? '従属接続詞' : '等位接続詞', num: '数詞', to: 'to' }[tags[i]] || 'その他';
+  }
+
+  /**
+   * 品詞・要素・修飾の矢印を決める(iOS版と同じ手順)
+   * 1. ヒントの記号で、文を節と句のまとまりに分ける(節の中も同じ手順で)
+   * 2. 最初の動詞のかたまり = V、その前の名詞のまとまりの中心 = S、
+   *    V のあとの名詞:be・become などなら C、そうでなければ O(make・call は2つめが C、それ以外は2つめも O)
+   *    V のすぐあとの to不定詞・that / what の節 = O、それ以外の句・節・副詞 = M
+   * 3. 矢印:形容詞 → 名詞、名詞のすぐあとの句・関係詞節 → その名詞、それ以外 → 動詞(程度の副詞は次の形容詞へ)
+   * 4. 関係詞節の which・who は、すぐあとが動詞なら S、そうでなければ O
+   */
+  function analyze(sentence) {
+    const words = wordsOf(sentence), tags = tagsOf(words), w = words.map(bare), n = words.length;
+    const spans = hintsOf(sentence), roles = new Array(n).fill(null);
+    let arrows = [];
+    const isDemo = (x) => ['this', 'that', 'these', 'those'].includes(x);
+    const isNominal = (i) => ['noun', 'pron', 'num'].includes(tags[i]) || (isDemo(w[i]) && i + 1 < n && tags[i + 1] === 'verb');
+    /** lo..hi の中で i から始まるいちばん大きな記号(まとまり全体と同じものは除く) */
+    const spanAt = (i, lo, hi) => spans.filter(s => s.start === i && s.end <= hi && s.end >= lo && !(s.start === lo && s.end === hi)).sort((a, b) => len(b) - len(a))[0] || null;
+
+    function unit(lo, hi, skipFirst) {
+      if (lo > hi) return;
+      let i = skipFirst ? lo + 1 : lo, verb = null, linking = false, complex = false, objects = 0, lastNoun = null, hasSubject = false;
+      let pending = [];
+      /** 名詞のまとまり(形容詞は中心へ矢印、程度の副詞は形容詞へ) */
+      const nounPhrase = (start) => {
+        let j = start, head = null; const adjs = [];
+        while (j <= hi && !spanAt(j, lo, hi) && (['det', 'adj', 'noun', 'num', 'pron'].includes(tags[j]) || isDemo(w[j])
+            || (tags[j] === 'adv' && DEGREE_ADVERBS.has(w[j]) && j + 1 <= hi && tags[j + 1] === 'adj' && j > start))) {
+          if (tags[j] === 'adv') { roles[j] = 'M'; arrows.push([j, j + 1]); j++; continue; }
+          if (tags[j] === 'adj') adjs.push(j);
+          if (isNominal(j) || tags[j] === 'noun') head = j;
+          if (tags[j] === 'pron' && j === start && head === j) { j++; break; }
+          if (endsWithPause(words[j])) { j++; break; }
+          j++;
+        }
+        if (head == null) return null;
+        adjs.filter(a => a < head).forEach(a => arrows.push([a, head]));
+        return { head, end: j - 1 };
+      };
+      while (i <= hi) {
+        const span = spanAt(i, lo, hi);
+        if (span) {
+          const first = w[span.start];
+          if (span.kind === 'clause') {
+            unit(span.start, span.end, true);
+            const relative = RELATIVES.has(first) || (first === 'that' && lastNoun === span.start - 1);
+            if (relative && lastNoun != null && lastNoun === span.start - 1) arrows.push([span.start, lastNoun]);
+            else if (verb != null && objects === 0 && NOUN_CLAUSE_STARTERS.has(first)) { roles[span.start] = linking ? 'C' : 'O'; objects++; }
+            else { roles[span.start] = 'M'; if (verb != null) arrows.push([span.start, verb]); else pending.push(span.start); }
+          } else {
+            for (let k = span.start + 1; k <= span.end;) { const np = nounPhrase(k); k = np ? np.end + 1 : k + 1; }
+            if (first === 'to' && verb != null && objects === 0 && (lastNoun == null || lastNoun < verb) && !linking) { roles[span.start] = 'O'; objects++; }
+            else if (lastNoun != null && lastNoun === span.start - 1) { roles[span.start] = 'M'; arrows.push([span.start, lastNoun]); }
+            else { roles[span.start] = 'M'; if (verb != null) arrows.push([span.start, verb]); else pending.push(span.start); }
+          }
+          lastNoun = null; i = span.end + 1; continue;
+        }
+        if (verb == null && tags[i] === 'verb') {
+          // V のかたまり:助動詞のあとに動詞が続くあいだ(間の not・never などは M)
+          let j = i, last = i;
+          while (j <= hi && !spanAt(j, lo, hi)) {
+            if (tags[j] === 'verb') { if (j > i && !AUXILIARIES.has(w[last])) break; roles[j] = 'V'; last = j; }
+            else if (tags[j] === 'adv' && MID_VERB_ADVERBS.has(w[j]) && AUXILIARIES.has(w[last]) && j + 1 <= hi && tags[j + 1] === 'verb') { roles[j] = 'M'; arrows.push([j, -1]); }
+            else break;
+            j++;
+            if (endsWithPause(words[j - 1])) break;
+          }
+          verb = last;
+          arrows = arrows.map(a => a[1] === -1 ? [a[0], last] : a);
+          linking = LINKING_VERBS.has(w[last]); complex = COMPLEX_VERBS.has(w[last]);
+          pending.forEach(p => arrows.push([p, last])); pending = [];
+          i = Math.max(j, i + 1); lastNoun = null; continue;
+        }
+        // 動詞のあとの -ing(動名詞)は O(be などのあとなら C)
+        if (verb != null && tags[i] === 'verb' && w[i].endsWith('ing') && !AUXILIARIES.has(w[verb])) {
+          roles[i] = linking ? 'C' : 'O'; objects++; lastNoun = null; i++;
+          if (!endsWithPause(words[i - 1]) && i <= hi) { const np = nounPhrase(i); if (np) i = np.end + 1; }
+          continue;
+        }
+        if (tags[i] === 'adv') {
+          roles[i] = 'M';
+          if (i + 1 <= hi && DEGREE_ADVERBS.has(w[i]) && ['adj', 'adv'].includes(tags[i + 1])) arrows.push([i, i + 1]);
+          else if (verb != null) arrows.push([i, verb]); else pending.push(i);
+          i++; continue;
+        }
+        const np = nounPhrase(i);
+        if (np) {
+          if (verb == null) { if (!hasSubject) { roles[np.head] = 'S'; hasSubject = true; } }
+          else if (linking) roles[np.head] = 'C';
+          else if (objects >= 1 && complex) roles[np.head] = 'C';
+          else { roles[np.head] = 'O'; objects++; }
+          lastNoun = np.head; i = np.end + 1; continue;
+        }
+        if (tags[i] === 'adj' && verb != null && (linking || (complex && objects >= 1))) roles[i] = 'C';
+        i++;
+      }
+      if (skipFirst && ['which', 'who', 'whom', 'that'].includes(w[lo]) && lo > 0 && (tags[lo - 1] === 'noun' || words[lo - 1].endsWith(','))) {
+        roles[lo] = lo + 1 <= hi && tags[lo + 1] === 'verb' ? 'S' : (roles.slice(lo + 1, hi + 1).includes('O') ? null : 'O');
+      }
+    }
+    unit(0, n - 1, false);
+    const seen = new Set();
+    arrows = arrows.filter(([f, t]) => f !== t && t >= 0 && !seen.has(f + '-' + t) && seen.add(f + '-' + t));
+    return { words, tags, spans, roles, arrows };
+  }
+
+  /** 原形の目安(-s・-es・-ed・-ing を取る。よく使う不規則な形は表で) */
+  function lemma(word) {
+    const w = bare(word);
+    const irregular = { is: 'be', am: 'be', are: 'be', was: 'be', were: 'be', been: 'be', has: 'have', had: 'have', did: 'do', does: 'do', went: 'go', gone: 'go', made: 'make', said: 'say', got: 'get', took: 'take', taken: 'take', came: 'come', saw: 'see', seen: 'see', knew: 'know', known: 'know', thought: 'think', bought: 'buy', found: 'find', gave: 'give', given: 'give', told: 'tell', felt: 'feel', became: 'become', left: 'leave', kept: 'keep', ran: 'run', wrote: 'write', written: 'write', ate: 'eat', children: 'child', men: 'man', women: 'woman', people: 'person', better: 'good', best: 'good', fed: 'feed', bit: 'bite' };
+    if (irregular[w]) return irregular[w];
+    const doubled = (st) => st.length >= 3 && st[st.length - 1] === st[st.length - 2] && !'aeiouls'.includes(st[st.length - 1]) ? st.slice(0, -1) : st;
+    if (w.endsWith('ies') && w.length > 4) return w.slice(0, -3) + 'y';
+    if (w.endsWith('ing') && w.length > 5) return doubled(w.slice(0, -3));
+    if (w.endsWith('ed') && w.length > 4) { const st = w.slice(0, -2); return st.endsWith('i') ? st.slice(0, -1) + 'y' : doubled(st); }
+    if (w.endsWith('es') && ['ch', 'sh', 'ss', 'x'].some(e => w.slice(0, -2).endsWith(e))) return w.slice(0, -2);
+    if (w.endsWith('s') && !w.endsWith('ss') && w.length > 3) return w.slice(0, -1);
+    return w;
   }
 
   const same = (a, b) => a.kind === b.kind && a.start === b.start && a.end === b.end;
@@ -247,7 +401,10 @@
 
   // ---------------- 画面 ----------------
 
-  const state = { index: 0, tool: 'clause', showHint: false, sel: null, dragStart: null, passage: '' };
+  /** 見せる/隠す(品詞・SVOC・矢印)はこのブラウザに覚えておく */
+  const VIEW_KEY = 'ondoku.interpretView';
+  const view = (() => { try { return JSON.parse(localStorage.getItem(VIEW_KEY) || 'null') || { pos: true, roles: true, arrows: true }; } catch (e) { return { pos: true, roles: true, arrows: true }; } })();
+  const state = { index: 0, tool: 'clause', showHint: false, sel: null, dragStart: null, passage: '', detail: null };
 
   /** 今の英文の文の一覧 */
   const sentences = () => sentencesOf(state.passage);
@@ -264,6 +421,7 @@
     const saved = loadAll();
     const spans = (saved[sentence] && saved[sentence].spans) || [];
     const m = marks(words.length, spans);
+    const a = analyze(sentence);
     const open = (s) => `<b class="bk ${s.kind === 'clause' ? 'bk-c' : 'bk-p'}">${openOf(s)}</b>`;
     const close = (s) => `<b class="bk ${s.kind === 'clause' ? 'bk-c' : 'bk-p'}">${closeOf(s)}</b>`;
     const sel = state.sel;
@@ -273,9 +431,16 @@
         <div style="text-align:center"><b style="font-size:1.1rem">${state.index + 1} / ${list.length} 文</b><div class="muted" style="font-size:.8rem">保存した文 ${list.filter(s => saved[s]).length}</div></div>
         <button class="ghost big-arrow" data-ip="next" ${state.index >= list.length - 1 ? 'disabled' : ''}>▶</button>
       </div>
-      <div class="seg" style="margin:12px 0">${[['clause', '［ ］節'], ['phrase', '( )句'], ['erase', '消す']].map(([k, t]) => `<button class="${state.tool === k ? 'on' : ''}" data-ip="tool" data-k="${k}">${t}</button>`).join('')}</div>
-      <p class="muted" style="margin:0 0 6px">✍️ 単語をなぞると${state.tool === 'erase' ? '、重なる記号を消します' : '記号を付けます(同じ所をもう一度なぞると消えます)'}</p>
-      <div id="ip-words" class="ip-words">${words.map((w, i) => `<span class="iw ${sel && i >= sel[0] && i <= sel[1] ? 'sel' : ''}" data-i="${i}">${m[i].before.map(open).join('')}${esc(w)}${m[i].after.map(close).join('')}</span>`).join(' ')}</div>
+      <div class="seg" style="margin:12px 0">${[['clause', '［ ］節'], ['phrase', '( )句'], ['erase', '消す'], ['info', '🔍 調べる']].map(([k, t]) => `<button class="${state.tool === k ? 'on' : ''}" data-ip="tool" data-k="${k}">${t}</button>`).join('')}</div>
+      <div class="ip-toggles">${[['pos', '品詞'], ['roles', 'SVOC'], ['arrows', '修飾の矢印']].map(([k, t]) => `<button class="ip-toggle ${view[k] ? 'on' : ''}" data-ip="view" data-k="${k}">${view[k] ? '✓' : '○'} ${t}</button>`).join('')}</div>
+      <p class="muted" style="margin:0 0 6px">${state.tool === 'info' ? '👆 単語をタップすると、くわしい情報が出ます' : `✍️ 単語をなぞると${state.tool === 'erase' ? '、重なる記号を消します' : '記号を付けます(同じ所をもう一度なぞると消えます)'}`}</p>
+      <div class="ip-wrap ${view.arrows ? 'with-arrows' : ''}"><svg id="ip-arrows" class="ip-arrows"></svg>
+      <div id="ip-words" class="ip-words">${words.map((w, i) => {
+        const role = view.roles ? a.roles[i] : null;
+        const cross = view.arrows ? a.arrows.filter(([f]) => f === i) : [];
+        return `<span class="iw ${sel && i >= sel[0] && i <= sel[1] ? 'sel' : ''}" data-i="${i}"><span class="iw-text">${m[i].before.map(open).join('')}${esc(w)}${m[i].after.map(close).join('')}</span>${view.pos || view.roles ? `<span class="iw-sub">${role ? `<b class="role role-${role}">${role}</b>` : ''}${view.pos ? `<small>${esc(partOfSpeech(a.words, a.tags, i).split('(')[0])}</small>` : ''}</span>` : ''}${cross.map(([, t]) => `<span class="iw-to" data-from="${i}" data-to="${t}">→ ${esc(bare(words[t]))}</span>`).join('')}</span>`;
+      }).join(' ')}</div></div>
+      ${view.arrows && a.arrows.length ? '<p class="muted" style="font-size:.78rem;color:#9b51e0;margin:6px 0 0">矢印:修飾する語 → くわしくされる語</p>' : ''}
     </div>
     <div class="row" style="gap:10px;margin-bottom:16px">
       <button style="flex:1" data-ip="speak">🔊 区切って読む</button>
@@ -296,8 +461,53 @@
     }
     html += `<p class="muted" style="font-size:.85rem"><span class="bk-c">［ ］節</span>:主語と動詞のあるまとまり(when / because / that / which … で始まる)<br>
       <span class="bk-p">( )句</span>:主語と動詞のないまとまり(前置詞 + 名詞、to + 動詞、名詞のうしろの -ing / -ed)</p>`;
+    if (state.detail != null && state.detail < words.length) html += detailHTML(a, state.detail, spans);
     box.innerHTML = html;
     bindDrag(sentence, spans);
+    if (view.arrows) requestAnimationFrame(() => drawArrows(a.arrows));
+  }
+
+  /**
+   * 修飾の矢印(同じ行の語どうし):修飾する語の上から、くわしくされる語の上へ、上にふくらむ曲線と矢じり
+   * ふくらみの高さ = 18 + 2つの語の横の距離 × 0.08(最大 34)。ちがう行の語へは、曲線のかわりに語の下に「→ 語」と書く
+   */
+  function drawArrows(arrows) {
+    const svg = $('ip-arrows'), box = svg && svg.parentElement;
+    if (!svg) return;
+    const base = box.getBoundingClientRect();
+    svg.setAttribute('width', base.width); svg.setAttribute('height', base.height);
+    const rect = (i) => { const el = box.querySelector(`.iw[data-i="${i}"] .iw-text`); return el ? el.getBoundingClientRect() : null; };
+    let paths = '<defs><marker id="ip-head" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#9b51e0"/></marker></defs>';
+    arrows.forEach(([f, t]) => {
+      const a = rect(f), b = rect(t), label = box.querySelector(`.iw-to[data-from="${f}"][data-to="${t}"]`);
+      if (!a || !b) return;
+      const same = Math.abs(a.top - b.top) < a.height / 2;
+      if (label) label.style.display = same ? 'none' : '';
+      if (!same) return;
+      const x1 = a.left + a.width / 2 - base.left, x2 = b.left + b.width / 2 - base.left, y = a.top - base.top + 4;
+      const lift = Math.min(34, 18 + Math.abs(x2 - x1) * 0.08);
+      paths += `<path d="M${x1},${y} Q${(x1 + x2) / 2},${y - lift} ${x2},${y}" fill="none" stroke="#9b51e0" stroke-opacity=".8" stroke-width="1.8" marker-end="url(#ip-head)"/>`;
+    });
+    svg.innerHTML = paths;
+  }
+
+  /** 単語のくわしい情報:発音・品詞・原形・文の中の役割・修飾・入っているまとまり・自分の音読で言えなかった回数 */
+  function detailHTML(a, i, userSpans) {
+    const word = bare(a.words[i]);
+    const role = a.roles[i];
+    let missed = 0;
+    try { missed = JSON.parse(localStorage.getItem('ondoku.history') || '[]').filter(h => (h.miss || []).includes(word)).length; } catch (e) { /* なし */ }
+    const around = userSpans.filter(s => s.start <= i && i <= s.end).map(s => [s, '自分の記号'])
+      .concat(a.spans.filter(s => s.start <= i && i <= s.end).map(s => [s, 'ヒント'])).sort((x, y) => len(x[0]) - len(y[0]));
+    return `<div class="card ip-detail" id="ip-detail">
+      <div class="row" style="justify-content:space-between"><b class="ip-word">${esc(word)}</b><button class="ghost" data-ip="close-detail">✕ 閉じる</button></div>
+      <div class="row"><button class="secondary" data-ip="say" data-w="${esc(word)}" data-rate="0.9">🔊 発音</button><button class="secondary" data-ip="say" data-w="${esc(word)}" data-rate="0.5">🐢 ゆっくり</button></div>
+      <table><tr><th>品詞</th><td>${esc(partOfSpeech(a.words, a.tags, i))}</td></tr><tr><th>原形</th><td>${esc(lemma(a.words[i]))}</td></tr>
+        <tr><th>役割</th><td>${role ? `<b class="role role-${role}">${role}</b> ${esc(ROLE_MEANING[role])}` : '<span class="muted">要素の中心ではありません(冠詞や、まとまりの中の語など)</span>'}</td></tr>
+        ${a.arrows.filter(([f]) => f === i).map(([, t]) => `<tr><th>修飾</th><td style="color:#9b51e0">「${esc(bare(a.words[t]))}」をくわしくしている</td></tr>`).join('')}
+        ${a.arrows.filter(([, t]) => t === i).map(([f]) => `<tr><th>修飾</th><td style="color:#9b51e0">「${esc(bare(a.words[f]))}」にくわしくされている</td></tr>`).join('')}
+        ${around.map(([s, who]) => `<tr><th>${s.kind === 'clause' ? '節' : '句'}</th><td class="ip-serif">${esc(openOf(s) + a.words.slice(s.start, s.end + 1).join(' ') + closeOf(s))} <small class="muted">${who}</small></td></tr>`).join('')}
+        <tr><th>あなたの音読</th><td>言えなかった回数 ${missed}回</td></tr></table></div>`;
   }
 
   /** なぞる操作:触れた単語から、今触れている単語までを選び、指を離したら記号を付ける・消す */
@@ -322,8 +532,10 @@
       if (state.dragStart == null) return;
       const [lo, hi] = state.sel;
       state.dragStart = null; state.sel = null;
-      saveSentence(sentence, apply(spans, lo, hi, state.tool === 'erase' ? null : state.tool));
+      if (state.tool === 'info') state.detail = lo;   // 調べる:タップした単語の詳しい情報
+      else saveSentence(sentence, apply(spans, lo, hi, state.tool === 'erase' ? null : state.tool));
       render();
+      if (state.tool === 'info') { const d = $('ip-detail'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     };
     area.onpointercancel = () => { state.dragStart = null; state.sel = null; paint(); };
   }
@@ -335,9 +547,12 @@
     const list = sentences(), sentence = list[state.index], words = sentence ? wordsOf(sentence) : [];
     const spans = (sentence && (loadAll()[sentence] || {}).spans) || [];
     switch (el.dataset.ip) {
-      case 'prev': state.index = Math.max(0, state.index - 1); break;
-      case 'next': state.index = Math.min(list.length - 1, state.index + 1); break;
+      case 'prev': state.index = Math.max(0, state.index - 1); state.detail = null; break;
+      case 'next': state.index = Math.min(list.length - 1, state.index + 1); state.detail = null; break;
       case 'tool': state.tool = el.dataset.k; break;
+      case 'view': view[el.dataset.k] = !view[el.dataset.k]; try { localStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch (e) { /* なし */ } break;
+      case 'close-detail': state.detail = null; break;
+      case 'say': { const u = new SpeechSynthesisUtterance(el.dataset.w); u.lang = 'en-US'; u.rate = Number(el.dataset.rate) || 0.85; speechSynthesis.cancel(); speechSynthesis.speak(u); return; }
       case 'hint': state.showHint = !state.showHint; break;
       case 'clear': saveSentence(sentence, []); break;
       // 自分の記号がなければ、ヒントの記号で区切って読む
@@ -350,6 +565,6 @@
   $('passage').addEventListener('input', () => { state.index = 0; });
 
   // 練習のタブなどから描き直せるように。テストからルールを呼べるように
-  window.RecitoInterpret = { render, hintsOf, renderText, wordsOf, sentencesOf, tagsOf, chunks, compare, apply,
+  window.RecitoInterpret = { analyze, lemma, partOfSpeech, render, hintsOf, renderText, wordsOf, sentencesOf, tagsOf, chunks, compare, apply,
     rendered: (sentence) => renderText(wordsOf(sentence), hintsOf(sentence)) };
 })();
