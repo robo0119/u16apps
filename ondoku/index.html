@@ -10,8 +10,8 @@
   <meta property="og:description" content="英文を声に出して読むと、その場で採点。読めた単語は緑、言えなかった単語は赤。">
   <link rel="icon" href="../icons/ondokuchecker.png">
   <link rel="apple-touch-icon" href="../icons/ondokuchecker.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261104a">
-  <script src="../common/gate.js?v=20261104a"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261105a">
+  <script src="../common/gate.js?v=20261105a"></script>
   <style>
     /* --accent は文字の色、--brand は塗りの色(ボタン・上のバー)。暗い画面では文字だけ明るくする */
     :root { --accent: #142a5c; --brand: #142a5c; --serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif; }
@@ -49,6 +49,7 @@
     #pview .read { color: var(--good); }
     #pview .miss { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
     #pview .todo { color: var(--text); opacity: .75; }
+    #pview .masked { color: var(--muted); letter-spacing: .02em; }
     #passage { font-family: var(--serif); font-size: 1.15rem; min-height: 200px; margin-top: 12px; }
     #progress-wrap { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 10px; }
     #progress { height: 100%; width: 0; background: var(--good); transition: width .3s; }
@@ -159,7 +160,7 @@
         <div class="steps">
           <div class="step"><b>① 英文をえらぶ</b>見本・ライブラリ・自分で貼り付け</div>
           <div class="step"><b>② 🎤 で読む</b>読んだ所から色が変わる</div>
-          <div class="step"><b>③ 赤い単語を聞く</b>タップでお手本の発音</div>
+          <div class="step"><b>③ 暗唱ステップへ</b>覚えた単語から隠れていき、最後は暗唱</div>
         </div>
         <div class="card support hidden" id="support"></div>
 
@@ -181,6 +182,7 @@
           <button data-mode="shadow">🎧 シャドーイング</button>
         </div>
 
+        <div class="card" id="recall"></div>
         <div class="card" id="read-panel">
           <div class="mic-area">
             <button id="mic" aria-label="音読をはじめる">🎤</button>
@@ -208,13 +210,13 @@
   </div>
   <footer>Recito — 英語の音読練習</footer>
 
-  <script src="../common/qr.js?v=20261104a"></script>
-  <script src="../common/bridge.js?v=20261104a"></script>
-  <script src="../common/charts.js?v=20261104a"></script>
-  <script src="../common/firebase-config.js?v=20261104a"></script>
-  <script src="../common/sync.js?v=20261104a"></script>
-  <script src="library.js?v=20261104a"></script>
-  <script src="app.js?v=20261104a"></script>
-  <script src="shadow.js?v=20261104a"></script>
+  <script src="../common/qr.js?v=20261105a"></script>
+  <script src="../common/bridge.js?v=20261105a"></script>
+  <script src="../common/charts.js?v=20261105a"></script>
+  <script src="../common/firebase-config.js?v=20261105a"></script>
+  <script src="../common/sync.js?v=20261105a"></script>
+  <script src="library.js?v=20261105a"></script>
+  <script src="app.js?v=20261105a"></script>
+  <script src="shadow.js?v=20261105a"></script>
 </body>
 </html>

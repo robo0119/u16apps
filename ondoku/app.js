@@ -63,6 +63,43 @@
     return ref.map((t, i) => ({ ...t, ok: pair[i] >= 0, hyp: pair[i] }));
   }
 
+  /**
+   * 音声認識の途中の結果を、つなぎ合わせて「今までに読んだ全部」にする(iOS版の TranscriptJoiner と同じ)
+   * Safari など、読んでいる途中で少し間が空くと、それまでの文を捨てて次の部分だけを返し直すことがある。
+   * そのまま使うと最初のほうが全部赤くなるので、返し直しを見つけたら、それまでの文を確定として残す
+   * 返し直しの判定:前の文と新しい文の、順番どおりに同じ単語(最長共通部分列)の数を数え、
+   *   前が3語以上で、残った単語が前の半分より少ない → 新しい発話
+   *   前が1〜2語で、1語も残らないか、短くなって最初の単語が違う → 新しい発話
+   * まちがえて返し直しと判定しても、同じ単語が2回入るだけで、採点には影響しない
+   */
+  function makeJoiner() {
+    let committed = '', current = '';
+    const words = (t) => tokenize(t).map(w => w.norm);
+    const common = (a, b) => align(a.join(' '), b.join(' ')).filter(w => w.ok).length;
+    const all = () => [committed, current].filter(Boolean).join(' ');
+    return {
+      /** 届いた文を受け取る */
+      receive(text) {
+        const next = (text || '').trim();
+        if (!next) return;   // 空の結果では前の文を消さない
+        // 確定の部分もふくめた全部がほぼ(8割以上)返ってきたら、それをそのまま使う(二重に数えない)
+        const whole = words(all()), after = words(next);
+        if (committed && after.length * 10 >= whole.length * 8 && common(whole, after) * 10 >= whole.length * 8) { committed = ''; current = next; return; }
+        const before = words(current);
+        if (before.length && after.length) {
+          const c = common(before, after);
+          const restart = before.length >= 3 ? c * 2 < before.length : c === 0 || (after.length < before.length && after[0] !== before[0]);
+          if (restart) { committed = all(); current = ''; }
+        }
+        current = next;
+      },
+      /** 聞き取りをつなぎ直すとき:今までの文を確定にする */
+      commit() { committed = all(); current = ''; },
+      /** 今までに読んだ全部の文 */
+      text: all,
+    };
+  }
+
   /** 読んでいる途中の色:読めた単語は緑、読めた単語より前で抜けた単語は赤、まだ先の単語は色なし */
   function live(reference, spoken) {
     const words = align(reference, spoken);
@@ -137,6 +174,78 @@
     return Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b));
   }
 
+  // ---------------- 暗唱ステップ(iOS版の RecallPlan.swift と同じ) ----------------
+  // 学校の「音読 → 暗唱」の練習を、採点の記録で自分専用にしたもの。
+  // 何回も続けて読めた単語(=覚えた単語)から先に隠し、まだ言えない単語は見せたままにする。読むと、言えた単語から姿が現れる
+
+  const RECALL_NAMES = ['全文', '少し隠す', '覚えた単語を隠す', '頭文字だけ', '暗唱'];
+  /** 「覚えた」とみなす、続けて読めた回数 */
+  const LEARNED_STREAK = 2;
+
+  /** 単語ごとに、最近の練習で何回続けて読めたか(同じ英文の練習を新しい順に見て、読めなかったらそこで止める) */
+  function recallStreaks(text) {
+    const n = tokenize(text).length;
+    const attempts = history().filter(h => h.passage === text).slice(-10).map(h => align(text, h.spoken).map(w => w.ok));
+    return Array.from({ length: n }, (_, i) => {
+      let c = 0;
+      for (let k = attempts.length - 1; k >= 0 && attempts[k][i]; k--) c++;
+      return c;
+    });
+  }
+
+  /**
+   * ステップごとの見せ方('show' / 'initial' 頭文字だけ / 'hidden' 全部隠す)
+   * - 0:全部見せる
+   * - 1:覚えた単語(2回以上続けて読めた)のうち、続けて読めた回数が多い順に半分(切り上げ)を頭文字だけに
+   * - 2:覚えた単語を全部、頭文字だけに
+   * - 3:全部の単語を頭文字だけに
+   * - 4:全部隠す(暗唱)
+   */
+  function recallMasks(streaks, level) {
+    if (level <= 0) return streaks.map(() => 'show');
+    if (level === 1) {
+      const learned = streaks.map((s, i) => i).filter(i => streaks[i] >= LEARNED_STREAK).sort((a, b) => streaks[b] - streaks[a] || a - b);
+      const chosen = new Set(learned.slice(0, Math.ceil(learned.length / 2)));
+      return streaks.map((s, i) => chosen.has(i) ? 'initial' : 'show');
+    }
+    if (level === 2) return streaks.map(s => s >= LEARNED_STREAK ? 'initial' : 'show');
+    if (level === 3) return streaks.map(() => 'initial');
+    return streaks.map(() => 'hidden');
+  }
+
+  /** 隠した単語の表示(前後の記号はそのまま。例:"great," → "g____,") */
+  function recallDisplay(word, mask) {
+    if (mask === 'show') return word;
+    const m = word.match(/^([^A-Za-z0-9]*)([A-Za-z0-9][\s\S]*[A-Za-z0-9]|[A-Za-z0-9])([^A-Za-z0-9]*)$/);
+    if (!m) return word;
+    const body = m[2];   // 最初の文字から最後の文字まで(don't の ' もふくめて数える。iOS版と同じ)
+    const masked = mask === 'initial' ? body[0] + '_'.repeat(body.length - 1) : '_'.repeat(body.length);
+    return m[1] + masked + m[3];
+  }
+
+  /** おすすめのステップ:前回の音読のステップと正確さから(90%以上 → 1つ上、70%未満 → 1つ下)。記録がなければ 0 */
+  function recommendedLevel(text) {
+    const last = history().filter(h => h.passage === text && h.mode === '音読').pop();
+    if (!last) return 0;
+    const lv = last.lv || 0;
+    return last.acc >= 90 ? Math.min(4, lv + 1) : last.acc < 70 ? Math.max(0, lv - 1) : lv;
+  }
+
+  /** 暗唱ステップのカード */
+  function renderRecall() {
+    const box = $('recall');
+    if (!box) return;
+    const text = passage();
+    const streaks = recallStreaks(text), masks = recallMasks(streaks, state.recall);
+    const rec = recommendedLevel(text), hidden = masks.filter(m => m !== 'show').length;
+    const learned = streaks.filter(s => s >= LEARNED_STREAK).length;
+    box.innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">🧠 暗唱ステップ</h2>
+        ${rec !== state.recall ? `<button class="chip" data-ow="recall" data-lv="${rec}">おすすめ: ${rec}</button>` : ''}</div>
+      <div class="seg" style="margin:10px 0 6px">${[0, 1, 2, 3, 4].map(l => `<button class="${l === state.recall ? 'on' : ''}" data-ow="recall" data-lv="${l}">${l}</button>`).join('')}</div>
+      <b>${state.recall}:${RECALL_NAMES[state.recall]}${state.recall ? `・${hidden}語を隠しています` : ''}</b>
+      <p class="muted" style="margin:2px 0 0">${state.recall ? '言えた単語から姿が現れます。90%以上で次のステップへ' : `読めた単語を覚えたら、少しずつ隠して暗唱へ。覚えた単語(2回続けて読めた)は今 ${learned}語`}</p>`;
+  }
+
   // ---------------- 記録(このブラウザの中だけ) ----------------
 
   /** 記録を読む(古い順) */
@@ -149,7 +258,7 @@
     if (!r.words.length || !r.spoken.trim()) return;
     const list = history();
     list.push({ d: new Date().toISOString(), mode, passage: r.passage, spoken: r.spoken, acc: Math.round(r.acc * 10) / 10,
-      wpm: Math.round(r.wpm), sec: Math.round(r.seconds), total: r.words.length, miss: [...new Set(r.words.filter(w => !w.ok).map(w => w.norm))] });
+      wpm: Math.round(r.wpm), sec: Math.round(r.seconds), total: r.words.length, lv: mode === '音読' ? state.recall : 0, miss: [...new Set(r.words.filter(w => !w.ok).map(w => w.norm))] });
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(-300))); } catch (e) { /* 容量など */ }
     if (window.RecitoLibrary) RecitoLibrary.record(r.passage, r.acc);
   }
@@ -178,6 +287,7 @@
 
   /** 結果のHTML。opts.mode:'read' か 'shadow'、opts.prev:前回の正確さ */
   function resultHTML(r, opts = {}) {
+    state.result = r;   // 「赤い単語だけで練習」で使う(音読・シャドーイングどちらの結果でも)
     if (!r.words.length || !r.spoken.trim()) return '<div class="card"><p class="warn">聞き取れませんでした。マイクに近づいて、もう一度どうぞ</p></div>';
     const [g, gc] = grade(r.acc);
     const missed = [...new Set(r.words.filter(w => !w.ok).map(w => w.norm))];
@@ -212,7 +322,7 @@
 
   // ---------------- 練習の画面 ----------------
 
-  const state = { tab: 'practice', mode: 'read', editing: false, listening: false, result: null };
+  const state = { tab: 'practice', mode: 'read', editing: false, listening: false, result: null, recall: 0 };
 
   /** 英文(入力欄の中身) */
   const passage = () => $('passage').value.trim();
@@ -221,8 +331,14 @@
   function renderPassage(colors) {
     const words = tokenize(passage());
     $('count').textContent = `${words.length} 語`;
+    // 暗唱ステップ:読めた単語・抜けた単語は姿を見せ、まだの単語は隠したまま(シャドーイングでは使わない)
+    const masks = state.mode === 'read' && state.recall > 0 ? recallMasks(recallStreaks(passage()), state.recall) : null;
     $('pview').innerHTML = words.length
-      ? words.map((w, i) => `<span class="pw ${colors ? colors[i] : ''}">${esc(w.display)}</span>`).join(' ')
+      ? words.map((w, i) => {
+          const c = colors ? colors[i] : '';
+          const mask = masks && c !== 'read' && c !== 'miss' ? masks[i] : 'show';
+          return `<span class="pw ${c} ${mask !== 'show' ? 'masked' : ''}">${esc(recallDisplay(w.display, mask))}</span>`;
+        }).join(' ')
       : '<span class="muted">英文を入れてください(✎ 編集 から貼り付け)</span>';
     $('pview').classList.toggle('hidden', state.editing);
     $('passage').classList.toggle('hidden', !state.editing);
@@ -232,9 +348,9 @@
 
   /** 英文を入れかえる(見本・ライブラリ・苦手な単語から) */
   function usePassage(text, mode) {
+    if (state.listening || document.body.classList.contains('shadowing')) return;   // 練習中は英文を変えない
     $('passage').value = text;
     $('passage').dispatchEvent(new Event('input'));
-    state.result = null;
     $('result').innerHTML = '';
     if (mode) setMode(mode);
     showTab('practice');
@@ -243,9 +359,12 @@
 
   /** 音読とシャドーイングを切りかえる */
   function setMode(mode) {
+    if (state.listening || document.body.classList.contains('shadowing')) return;   // 練習中は切りかえない
     state.mode = mode;
     document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
     $('read-panel').classList.toggle('hidden', mode !== 'read');
+    $('recall').classList.toggle('hidden', mode !== 'read');
+    renderPassage();
     $('shadow').classList.toggle('hidden', mode !== 'shadow');
   }
 
@@ -256,15 +375,16 @@
    */
   function setupMic() {
     if (!Recognition) return;
-    let rec = null, started = 0, first = 0, lastAt = 0, text = '', kept = '', total = 0;
+    let rec = null, started = 0, first = 0, lastAt = 0, text = '', joiner = makeJoiner(), total = 0, restarts = 0;
 
-    /** 聞き取りを1回始める(途中で切れたら、それまでの文を kept に残して、もう一度これを呼ぶ) */
+    /** 聞き取りを1回始める(途中で切れたら、それまでの文を確定にして、もう一度これを呼ぶ) */
     const begin = () => {
       rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
       rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
       rec.onresult = (e) => {
         const now = Array.from(e.results).map(r => r[0].transcript).join(' ');
-        text = (kept + ' ' + now).trim();
+        joiner.receive(now);
+        text = joiner.text();
         if (!first) first = Date.now();
         lastAt = Date.now();
         const colors = live(passage(), text);
@@ -273,15 +393,19 @@
         // 最後の単語まで読めたら、少し待って止める
         if (colors[colors.length - 1] === 'read') setTimeout(stopListening, 700);
       };
+      // つなぎ直しても直らないエラー(マイクが使えない・ネットにつながらない)は、そこで止めて知らせる
       rec.onerror = (e) => {
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          $('mic-note').innerHTML = '<span class="bad">マイクが使えません。アドレスバーの🔒からマイクを許可してください</span>';
-          state.listening = false;
-        }
+        const message = {
+          'not-allowed': 'マイクが使えません。アドレスバーの🔒からマイクを許可してください',
+          'service-not-allowed': 'このブラウザでは声の入力が使えません(Chrome・Edge・Safari で開いてください)',
+          'audio-capture': 'マイクが見つかりません',
+          'network': '声の入力にはインターネットが必要です。つながっているか確かめてください',
+        }[e.error];
+        if (message) { $('mic-note').innerHTML = `<span class="bad">${message}</span>`; state.listening = false; }
       };
       rec.onend = () => {
         // 黙っている時間が長いと、ブラウザが聞き取りを止めることがある → 2分までは、つなぎ直す
-        if (state.listening && Date.now() - started < 120000) { kept = text; try { begin(); return; } catch (err) { /* 採点へ */ } }
+        if (state.listening && Date.now() - started < 120000 && restarts < 10) { restarts++; joiner.commit(); try { begin(); return; } catch (err) { /* 採点へ */ } }
         rec = null;
         state.listening = false;
         updateMic();
@@ -299,7 +423,7 @@
       if (!passage()) { state.editing = true; renderPassage(); return; }
       state.editing = false;
       speechSynthesis.cancel();
-      text = ''; kept = ''; started = Date.now(); first = 0; lastAt = 0;
+      text = ''; joiner = makeJoiner(); started = Date.now(); first = 0; lastAt = 0; restarts = 0;
       total = tokenize(passage()).length;
       $('mic-note').textContent = '';
       $('progress').style.width = '0%';
@@ -322,10 +446,12 @@
   /** 音読を採点して、結果を出して記録する */
   function finishRead(spoken, seconds) {
     const r = makeResult(passage(), spoken, seconds);
-    state.result = r;
     record(r, '音読');
+    state.recall = recommendedLevel(r.passage);   // 次はおすすめのステップで
+    renderRecall();
     $('result').innerHTML = resultHTML(r, { mode: 'read', prev: previousAccuracy(r.passage) });
-    renderPassage(r.words.map(w => w.ok ? 'read' : 'miss'));
+    // 何も聞き取れなかったときは、英文を赤くしない(元の色にもどす)
+    renderPassage(spoken.trim() ? r.words.map(w => w.ok ? 'read' : 'miss') : null);
     $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -333,9 +459,10 @@
 
   /** 連続日数:今日(または昨日)から、1日も空けずに練習した日の数 */
   function streakDays(list) {
-    const days = new Set(list.map(h => h.d.slice(0, 10)));
-    const d = new Date();
+    // 記録の時刻(世界標準時)を、この端末の日付にそろえて比べる(日本時間の朝9時より前の練習が前の日にならないように)
     const key = (x) => new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const days = new Set(list.map(h => key(new Date(h.d))));
+    const d = new Date();
     if (!days.has(key(d))) d.setDate(d.getDate() - 1);
     let n = 0;
     while (days.has(key(d))) { n++; d.setDate(d.getDate() - 1); }
@@ -447,7 +574,8 @@
   // ---------------- 操作 ----------------
 
   const ACTIONS = {
-    'practice-missed'() { usePassage([...new Set(state.result.words.filter(w => !w.ok).map(w => w.norm))].join(' '), 'read'); },
+    recall(el) { if (state.listening) return; state.recall = Number(el.dataset.lv); renderRecall(); renderPassage(); },
+    'practice-missed'() { if (!state.result) return; usePassage([...new Set(state.result.words.filter(w => !w.ok).map(w => w.norm))].join(' '), 'read'); },
     'practice-weak'() {
       const results = history().slice(-30).map(h => align(h.passage, h.spoken));
       usePassage(ranked(results.flat().filter(w => !w.ok).map(w => w.norm)).slice(0, 20).join(' '), 'read');
@@ -474,10 +602,12 @@
     $('passage').value = Bridge.load(KEY, SAMPLES[0].text);
     $('passage').addEventListener('input', () => {
       Bridge.save(KEY, $('passage').value);
+      state.recall = recommendedLevel(passage());
+      renderRecall();
       if (!state.listening) renderPassage();
       clearTimeout(window.__t); window.__t = setTimeout(renderSend, 300);
     });
-    $('edit').onclick = () => { state.editing = !state.editing; renderPassage(); if (state.editing) $('passage').focus(); };
+    $('edit').onclick = () => { if (state.listening) return; state.editing = !state.editing; renderPassage(); if (state.editing) $('passage').focus(); };
     $('listen').onclick = () => speak(passage(), 0.9);
     if (!Recognition) {
       $('support').innerHTML = '<b>このブラウザは声の入力に対応していません。</b> Chrome・Edge・Safari で開いてください(iPad・iPhone は Safari)。';
@@ -488,6 +618,8 @@
     if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
     setupMic();
     updateMic();
+    state.recall = recommendedLevel(passage());
+    renderRecall();
     renderPassage();
     renderSend();
     setMode('read');
@@ -497,7 +629,7 @@
   }
 
   // シャドーイング・ライブラリ・テストから使えるように
-  window.OndokuWeb = { align, tokenize, speak, live, makeResult, resultHTML, record, previousAccuracy, usePassage, soundStats, SAMPLES };
+  window.OndokuWeb = { makeJoiner, align, tokenize, speak, live, makeResult, resultHTML, record, previousAccuracy, usePassage, soundStats, SAMPLES };
 
   (async () => {
     const payload = Bridge.hashPayload();

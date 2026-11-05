@@ -26,7 +26,7 @@
     recStart: 0,
     result: null,
   };
-  let rec = null, keptText = '', audio = null, ticker = null;
+  let rec = null, joiner = null, audio = null, ticker = null;
 
   /** 英文の中で、各単語(tokenize と同じ区切り方)が何文字目から始まるか */
   function wordOffsets(text) {
@@ -49,7 +49,7 @@
     if (!state.total) return;
     const myTurn = ++state.turn;
     Object.assign(state, { result: null, modelCount: 0, modelTimes: new Array(state.total).fill(null), spoken: '', hypTimes: [] });
-    keptText = '';
+    joiner = OndokuWeb.makeJoiner();
     document.body.classList.add('shadowing');
     $('result').innerHTML = '';
     if (state.mode === 'repeat') {
@@ -118,7 +118,9 @@
       rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
       rec.onresult = (e) => {
         const now = Array.from(e.results).map(r => r[0].transcript).join(' ');
-        state.spoken = (keptText + ' ' + now).trim();
+        // 返し直しがあっても、前の文を消さずにつなげる(最初のほうが赤くならないように)
+        joiner.receive(now);
+        state.spoken = joiner.text();
         // 新しく出てきた単語に、その時刻を付ける(あとから言い直されても、最初に出た時刻のまま)
         const n = tokenize(state.spoken).length, t = (Date.now() - state.recStart) / 1000;
         for (let j = state.hypTimes.length; j < n; j++) state.hypTimes[j] = t;
@@ -127,7 +129,7 @@
       };
       rec.onerror = (e) => { if (e.error === 'not-allowed') { state.error = 'マイクが使えません(ブラウザの設定で許可してください)'; cancel(); } };
       rec.onend = () => {
-        if (state.phase === 'speaking') { keptText = state.spoken; try { begin(); } catch (err) { /* もう一度は始めない */ } }
+        if (state.phase === 'speaking') { joiner.commit(); try { begin(); } catch (err) { /* もう一度は始めない */ } }
       };
       rec.start();
     };
