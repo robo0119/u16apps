@@ -322,6 +322,8 @@
 
   // ---------------- 練習の画面 ----------------
 
+  /** タブ(練習・ライブラリ・記録・苦手・英文解釈・チャレンジ) */
+  const TABS = ['practice', 'library', 'history', 'weak', 'interpret', 'challenge'];
   const state = { tab: 'practice', mode: 'read', editing: false, listening: false, result: null, recall: 0 };
 
   /** 英文(入力欄の中身) */
@@ -524,9 +526,11 @@
   function showTab(tab) {
     state.tab = tab;
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-    ['practice', 'library', 'history', 'weak'].forEach(t => $(`tab-${t}`).classList.toggle('hidden', t !== tab));
+    TABS.forEach(t => $(`tab-${t}`).classList.toggle('hidden', t !== tab));
     if (tab === 'history') renderHistory();
     if (tab === 'weak') renderWeak();
+    if (tab === 'interpret' && window.RecitoInterpret) RecitoInterpret.render();
+    if (tab === 'challenge' && window.RecitoChallenge) RecitoChallenge.render();
     try { localStorage.setItem('ondoku.tab', tab); } catch (e) { /* なし */ }
   }
 
@@ -625,7 +629,7 @@
     setMode('read');
     let tab = 'practice';
     try { tab = localStorage.getItem('ondoku.tab') || 'practice'; } catch (e) { /* なし */ }
-    showTab(['practice', 'library', 'history', 'weak'].includes(tab) ? tab : 'practice');
+    showTab(TABS.includes(tab) ? tab : 'practice');
   }
 
   // シャドーイング・ライブラリ・テストから使えるように
