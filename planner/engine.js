@@ -701,10 +701,47 @@
     return m ? m[1].split(/[、,・ ]/).filter(Boolean) : [];
   });
 
+  // ---- 成績の推移を定期考査と模試に分ける(TestTrend.swift と同じ)----
+  // 考査と模試はものさしがちがう(考査 = 得点率と平均点、模試 = 偏差値)ので、まぜずに分けて見る
+
+  const mean = (v) => v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  const pctOf = (e) => e.max > 0 ? e.score / e.max * 100 : 0;
+  const avgPctOf = (e) => e.average != null && e.max > 0 ? e.average / e.max * 100 : null;
+
+  /**
+   * その種類のテストを1回ずつまとめ、古い順に全体の値を出す
+   * 定期考査:あなた = 得点率の平均、主要教科 = 主要教科の得点率の平均、平均 = 平均点の得点率の平均
+   * 模試:偏差値があれば あなた = 偏差値の平均、主要教科 = 主要教科の偏差値の平均、平均 = 50(なければ得点率で)
+   * entries:[{subject, date, testName, score, max, deviation, average, isMock}]
+   */
+  function trendOverall(entries, kind, isCore) {
+    const groups = {};
+    entries.filter(e => e.isMock === (kind === 'mock')).forEach(e => { (groups[e.date + '|' + e.testName] = groups[e.date + '|' + e.testName] || []).push(e); });
+    return Object.values(groups).map(list => {
+      const useDev = kind === 'mock' && list.some(e => e.deviation != null);
+      const val = (e) => useDev ? e.deviation : pctOf(e);
+      const you = mean(list.map(val).filter(v => v != null));
+      if (you == null) return null;
+      const core = mean(list.filter(e => isCore(e.subject)).map(val).filter(v => v != null));
+      const average = useDev ? 50 : kind === 'exam' ? mean(list.map(avgPctOf).filter(v => v != null)) : null;
+      return { testName: list[0].testName, date: list[0].date, you, core, average, isDeviation: useDev };
+    }).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date) || a.testName.localeCompare(b.testName));
+  }
+
+  /** 1教科の推移(古い順):考査は得点率と平均点の得点率、模試は偏差値がそろっていれば偏差値(平均 50)、なければ得点率 */
+  function trendSeries(entries, subject, kind) {
+    const list = entries.filter(e => e.subject === subject && e.isMock === (kind === 'mock')).sort((a, b) => a.date.localeCompare(b.date));
+    const useDev = kind === 'mock' && list.length > 0 && list.every(e => e.deviation != null);
+    return { points: list.map(e => ({ entry: e, value: useDev ? e.deviation : pctOf(e), average: useDev ? 50 : avgPctOf(e) })), isDeviation: useDev };
+  }
+
+  /** 参考書をすすめるときの成績:模試があれば模試だけ(入試に近いため)、なければ全部 */
+  const forBookAdvice = (records, isMock) => { const m = records.filter(isMock); return m.length ? { records: m, fromMock: true } : { records, fromMock: false }; };
+
   const Engine = {
     dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
-    bookDeviation, ownsBook, adviseBooks, bookRoadmap, weakWordsFromProfile, UNKNOWN_DEVIATION,
+    trendOverall, trendSeries, forBookAdvice, bookDeviation, ownsBook, adviseBooks, bookRoadmap, weakWordsFromProfile, UNKNOWN_DEVIATION,
     ability, weakness, urgency, priority, allocate, isCore, trackWeight, estimateDeviation, effectiveDeviation, isMock, content, reason, plan, redistribute,
     modeOn, weight, examSubjects, inExamWindow, deadline, quota, stepFor, planQuota, isActive,
     latest, reviewDue, todaysQueue, reviewDoneToday, weakIn, weakFields, isAchieved, streak,

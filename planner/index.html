@@ -8,8 +8,8 @@
   <meta name="keywords" content="学習,勉強,教育,中学生,高校生">
   <link rel="icon" href="../icons/studyplanner.png">
   <link rel="apple-touch-icon" href="../icons/studyplanner.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261106a">
-  <script src="../common/gate.js?v=20261106a"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261106c">
+  <script src="../common/gate.js?v=20261106c"></script>
   <style>
     :root { --accent: #5b4ee0; --ok: #2f9e57; --tri: #f08a24; --ng: #e2474f; --ticket: #a35ee6; }
     .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
@@ -127,6 +127,20 @@
     .trend-val small { font-size: .8rem; }
     .trend-svg { width: 100%; height: 64px; display: block; }
     .trend-svg .axis { font-size: 8px; fill: var(--muted); }
+    .seg { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: var(--line); }
+    .seg button { flex: 1; background: transparent; color: var(--text); font-weight: 700; border-radius: 10px; white-space: nowrap; padding: 4px 10px; }
+    .seg button.on { background: var(--card); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+    .trend-seg { margin: 0; flex: none; min-width: 190px; }
+    .trend-seg button { min-height: 34px; font-size: .85rem; }
+    .ov-head { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; }
+    .ov-big { font-size: 1.8rem; font-variant-numeric: tabular-nums; }
+    .ov-svg { width: 100%; height: auto; display: block; }
+    .ov-svg .axis { font-size: 11px; fill: var(--muted); }
+    .ov-svg .ov-val { font-size: 13px; font-weight: 800; fill: #5856d6; }
+    .ov-svg .ov-name { font-size: 11px; font-weight: 700; fill: var(--text); }
+    .ov-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
+    .ov-legend i { display: inline-block; width: 16px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+    .ov-legend i.dash { height: 0; border-top: 2px dashed #999; }
     @media (max-width: 640px) {
       .tabs { position: fixed; top: auto; bottom: 10px; left: 10px; right: 10px; z-index: 20; justify-content: space-around; padding: 6px; border: none;
         border-radius: 30px; background: color-mix(in srgb, var(--card) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 6px 24px rgba(0,0,0,.15); }
@@ -230,13 +244,13 @@
   <main id="view"></main>
   <footer>データはこのブラウザと、ログインしていれば Firebase(本人だけが読み書きできる場所)に保存されます。</footer>
 
-  <script src="../common/bridge.js?v=20261106a"></script>
-  <script src="../common/charts.js?v=20261106a"></script>
-  <script src="../common/firebase-config.js?v=20261106a"></script>
-  <script src="engine.js?v=20261106a"></script>
-  <script src="store.js?v=20261106a"></script>
-  <script src="../common/sync.js?v=20261106a"></script>
-  <script src="logic.js?v=20261106a"></script>
-  <script src="app.js?v=20261106a"></script>
+  <script src="../common/bridge.js?v=20261106c"></script>
+  <script src="../common/charts.js?v=20261106c"></script>
+  <script src="../common/firebase-config.js?v=20261106c"></script>
+  <script src="engine.js?v=20261106c"></script>
+  <script src="store.js?v=20261106c"></script>
+  <script src="../common/sync.js?v=20261106c"></script>
+  <script src="logic.js?v=20261106c"></script>
+  <script src="app.js?v=20261106c"></script>
 </body>
 </html>

@@ -515,13 +515,15 @@
         <p class="muted" style="margin:6px 0 0">テストの結果(偏差値の目安)・苦手分野・持っている教材から、今やる本と次の本を選び、目標までの予想ロードマップを作ります</p></div>`;
     ordered.forEach(sub => {
       const c = color(sub.name);
-      const dev = E.bookDeviation(scores.filter(x => x.subject === sub.name).map(x => ({ date: x.date, score: x.score, max: x.max, deviation: E.effectiveDeviation(x) })));
+      // 参考書は入試に向けたものなので、模試があれば模試だけ、なければ定期考査から偏差値の目安を出す
+      const measured = E.forBookAdvice(scores.filter(x => x.subject === sub.name), E.isMock);
+      const dev = E.bookDeviation(measured.records.map(x => ({ date: x.date, score: x.score, max: x.max, deviation: E.effectiveDeviation(x) })));
       const latest = scores.filter(x => x.subject === sub.name && x.fields && x.fields.length).sort((a, b) => b.date.localeCompare(a.date))[0];
       const weak = (latest ? E.weakIn(latest.fields).map(f => f.name) : []).concat(profileWeak);
       const advice = E.adviseBooks(sub.name, dev, weak, owned, catalog.books);
       const road = E.bookRoadmap(sub.name, dev, goal, weak, owned, catalog.books, today());
       html += `<div class="card"><div class="row" style="justify-content:space-between"><h3 class="bk-sub"><i style="background:${c}"></i>${esc(sub.name)}${E.isCore(track, sub.name) ? ' <span style="color:#f08a24">★</span>' : ''}</h3>
-          <b style="color:${c};font-size:.9rem">${dev != null ? `今の目安 偏差値 ${Math.round(dev)}` : `成績なし(${E.UNKNOWN_DEVIATION}として)`}</b></div>
+          <b style="color:${c};font-size:.9rem">${dev != null ? `${measured.fromMock ? '模試' : '考査'}から 偏差値 ${Math.round(dev)}` : `成績なし(${E.UNKNOWN_DEVIATION}として)`}</b></div>
         ${advice.length ? advice.map(a => `<div class="bk-row"><span class="bk-kind" style="${a.kind === '今やる' ? `background:color-mix(in srgb, ${c} 15%, transparent);color:${c}` : ''}">${a.kind}</span>
             <div style="flex:1"><b>${esc(a.book.name)}</b><div class="muted" style="font-size:.8rem">${esc(a.book.publisher)}・${esc(a.book.area)} ${dots(a.book.level, c)}</div>
               <div style="font-size:.85rem">${esc(a.reasons.join('・'))}</div><div class="muted" style="font-size:.78rem">${esc(a.book.note)}</div></div>
@@ -537,24 +539,59 @@
   }
 
   /**
-   * 成績の推移:教科ごとの小さなカード(最新の値・前回との差・小さな折れ線)
-   * 横は何回目のテストか、縦はその教科の値の 最小 − 5 〜 最大 + 5(得点率は 0〜100、偏差値は 20〜80 におさめる)
+   * 全体の推移:テスト1回ごとに「あなた(全教科)」「主要教科」「平均」の3本の線
+   * 点の上に値、下にテストの名前と日付。縦の範囲は値の 最小 − 5 〜 最大 + 5
    */
-  function trendCards(ordered, scores, metric, track) {
-    const value = (x) => metric === 'percent' ? pct(x) : E.effectiveDeviation(x);
+  function overallChart(data, kind, track) {
+    if (!data.length) return `<p class="muted" style="margin:14px 0">${kind === 'exam' ? '定期考査' : '模試'}の結果はまだありません</p>`;
+    const isDev = data.some(d => d.isDeviation);
+    const vals = data.flatMap(d => [d.you, d.core, d.average].filter(v => v != null));
+    const lo = Math.max(isDev ? 20 : 0, Math.min(...vals) - 5), hi = Math.min(isDev ? 80 : 100, Math.max(...vals) + 5);
+    const W = 640, H = 240, L = 34, R = 16, T = 26, B = 44;
+    // 横:テストが1回ならまん中、2回以上なら左右に余白をとって等間かく
+    const x = (i) => data.length === 1 ? (L + W - R) / 2 : L + 30 + i * (W - L - R - 60) / (data.length - 1);
+    const y = (v) => T + (hi - v) / Math.max(1, hi - lo) * (H - T - B);
+    const unit = (v) => isDev ? v.toFixed(1) : Math.round(v) + '%';
+    const line = (key) => data.map((d, i) => d[key] == null ? null : `${x(i)},${y(d[key])}`).filter(Boolean).join(' ');
+    let svg = '';
+    for (let g = 0; g <= 3; g++) { const v = lo + (hi - lo) * g / 3; svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="4" y="${y(v) + 4}" class="axis">${Math.round(v)}</text>`; }
+    if (isDev) svg += `<line x1="${L}" x2="${W - R}" y1="${y(50)}" y2="${y(50)}" stroke="#999" stroke-dasharray="5 5"/>`;
+    else if (data.some(d => d.average != null)) svg += `<polyline points="${line('average')}" fill="none" stroke="#999" stroke-width="1.6" stroke-dasharray="5 5"/>` + data.map((d, i) => d.average == null ? '' : `<circle cx="${x(i)}" cy="${y(d.average)}" r="3" fill="#999"/>`).join('');
+    if (track !== 'なし' && data.some(d => d.core != null)) svg += `<polyline points="${line('core')}" fill="none" stroke="#f08a24" stroke-width="2.2"/>` + data.map((d, i) => d.core == null ? '' : `<circle cx="${x(i)}" cy="${y(d.core)}" r="3.5" fill="#f08a24"/>`).join('');
+    svg += `<polyline points="${line('you')}" fill="none" stroke="#5856d6" stroke-width="3.5"/>`;
+    data.forEach((d, i) => {
+      svg += `<circle cx="${x(i)}" cy="${y(d.you)}" r="6" fill="#5856d6"/><text x="${x(i)}" y="${y(d.you) - 11}" text-anchor="middle" class="ov-val">${unit(d.you)}</text>
+        <text x="${x(i)}" y="${H - 22}" text-anchor="middle" class="ov-name">${esc(d.testName.slice(0, 8))}</text><text x="${x(i)}" y="${H - 8}" text-anchor="middle" class="axis">${mdShort(d.date)}</text>`;
+    });
+    const last = data[data.length - 1], diff = data.length >= 2 ? last.you - data[data.length - 2].you : null;
+    return `<div class="ov-head"><b>全体</b><span><b class="ov-big">${unit(last.you)}</b>${diff != null ? ` <small class="${diff >= 0 ? 'good' : 'bad'}">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}</small>` : ''}</span></div>
+      <svg viewBox="0 0 ${W} ${H}" class="ov-svg">${svg}</svg>
+      <div class="ov-legend"><span><i style="background:#5856d6"></i>あなた(全教科)</span>${track !== 'なし' ? '<span><i style="background:#f08a24"></i>主要教科</span>' : ''}${data.some(d => d.average != null) ? `<span><i class="dash"></i>${isDev ? '平均(50)' : '平均点'}</span>` : ''}</div>`;
+  }
+
+  /**
+   * 成績の推移:教科ごとの小さなカード(最新の値・前回との差・小さな折れ線・灰色の点線は平均)
+   * 横は何回目のテストか、縦はその教科の値と平均の 最小 − 5 〜 最大 + 5(得点率は 0〜100、偏差値は 20〜80 におさめる)
+   */
+  function trendCards(ordered, entries, kind, track) {
     return `<div class="trend-grid">${ordered.map(sub => {
-      const pts = scores.filter(x => x.subject === sub.name).sort((a, b) => a.date.localeCompare(b.date)).map(x => ({ v: value(x), name: x.testName })).filter(p => p.v != null);
+      const series = E.trendSeries(entries, sub.name, kind), pts = series.points;
       if (!pts.length) return '';
-      const c = color(sub.name), last = pts[pts.length - 1].v, diff = pts.length >= 2 ? last - pts[pts.length - 2].v : null;
-      const [blo, bhi] = metric === 'percent' ? [0, 100] : [20, 80];
-      const lo = Math.max(blo, Math.min(...pts.map(p => p.v)) - 5), hi = Math.min(bhi, Math.max(...pts.map(p => p.v)) + 5);
+      const c = color(sub.name), last = pts[pts.length - 1].value, diff = pts.length >= 2 ? last - pts[pts.length - 2].value : null;
+      const [blo, bhi] = series.isDeviation ? [20, 80] : [0, 100];
+      const all = pts.map(p => p.value).concat(pts.map(p => p.average).filter(v => v != null));
+      const lo = Math.max(blo, Math.min(...all) - 5), hi = Math.min(bhi, Math.max(...all) + 5);
       const W = 200, H = 64, x = (i) => pts.length === 1 ? W / 2 : 8 + i * (W - 16) / (pts.length - 1), y = (v) => H - 6 - (v - lo) / Math.max(1, hi - lo) * (H - 12);
-      const line = pts.map((p, i) => `${x(i)},${y(p.v)}`).join(' ');
+      const line = pts.map((p, i) => `${x(i)},${y(p.value)}`).join(' ');
+      const avgLine = series.isDeviation ? `<line x1="0" x2="${W}" y1="${y(50)}" y2="${y(50)}" stroke="#999" stroke-dasharray="3 3"/>`
+        : pts.some(p => p.average != null) ? `<polyline points="${pts.map((p, i) => p.average == null ? null : `${x(i)},${y(p.average)}`).filter(Boolean).join(' ')}" fill="none" stroke="#999" stroke-width="1.2" stroke-dasharray="3 3"/>` : '';
+      const lastAvg = pts[pts.length - 1].average, gap = !series.isDeviation && lastAvg != null ? last - lastAvg : null;
       return `<div class="trend-card" style="--c:${c}"><div class="row" style="justify-content:space-between"><b><i class="dot" style="background:${c}"></i> ${esc(sub.name)}${E.isCore(track, sub.name) ? ' <span style="color:#f08a24">★</span>' : ''}</b><small class="muted">${pts.length}回</small></div>
-        <div class="trend-val">${metric === 'percent' ? Math.round(last) + '%' : last.toFixed(1)}${diff != null ? ` <small class="${diff >= 0 ? 'good' : 'bad'}">${diff >= 0 ? '↗ +' : '↘ '}${Math.round(diff)}</small>` : ''}</div>
-        <svg viewBox="0 0 ${W} ${H}" class="trend-svg"><polygon points="${x(0)},${H} ${line} ${x(pts.length - 1)},${H}" fill="${c}" fill-opacity=".12"/><polyline points="${line}" fill="none" stroke="${c}" stroke-width="2.5"/>
-          ${pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.v)}" r="3.5" fill="${c}"/>`).join('')}<text x="2" y="10" class="axis">${Math.round(hi)}</text><text x="2" y="${H - 2}" class="axis">${Math.round(lo)}</text></svg>
-        <small class="muted">${esc(pts[pts.length - 1].name)}</small></div>`;
+        <div class="trend-val">${series.isDeviation ? last.toFixed(1) : Math.round(last) + '%'}${diff != null ? ` <small class="${diff >= 0 ? 'good' : 'bad'}">${diff >= 0 ? '↗ +' : '↘ '}${Math.round(diff)}</small>` : ''}</div>
+        ${gap != null ? `<small class="${gap >= 0 ? 'good' : 'bad'}" style="font-weight:700">平均より ${gap >= 0 ? '+' : ''}${Math.round(gap)}</small>` : ''}
+        <svg viewBox="0 0 ${W} ${H}" class="trend-svg">${avgLine}<polygon points="${x(0)},${H} ${line} ${x(pts.length - 1)},${H}" fill="${c}" fill-opacity=".12"/><polyline points="${line}" fill="none" stroke="${c}" stroke-width="2.5"/>
+          ${pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.value)}" r="3.5" fill="${c}"/>`).join('')}<text x="2" y="10" class="axis">${Math.round(hi)}</text><text x="2" y="${H - 2}" class="axis">${Math.round(lo)}</text></svg>
+        <small class="muted">${esc(pts[pts.length - 1].entry.testName)}</small></div>`;
     }).join('')}</div>`;
   }
 
@@ -582,11 +619,14 @@
         ${avg(rest) != null ? `<div class="stat"><b class="muted">${Math.round(avg(rest))}%</b><span>ほかの教科</span></div>` : ''}</div></div>`;
     }
     if (scores.length) {
-      const metric = state.metric || 'percent';
+      // 推移は定期考査と模試に分ける(開いたときは、いちばん新しいテストの種類)
+      const kind = state.trendKind || (latest && E.isMock(latest.first) ? 'mock' : 'exam');
+      const entries = scores.map(x => ({ subject: x.subject, date: x.date, testName: x.testName, score: x.score, max: x.max, deviation: x.deviation ?? null, average: x.average ?? null, isMock: E.isMock(x) }));
       html += `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">成績の推移</h2>
-        <div class="row">${[['percent', '得点率'], ['deviation', '偏差値']].map(([k, t]) => `<button class="${metric === k ? '' : 'secondary'}" style="min-height:32px;padding:2px 12px" data-act="metric" data-k="${k}">${t}</button>`).join('')}</div></div>
-        ${trendCards(ordered, scores, metric, track)}
-        ${metric === 'deviation' ? '<p class="muted">考査は、順位か平均点から見積もった偏差値の目安</p>' : ''}</div>`;
+        <div class="seg trend-seg">${[['exam', '定期考査'], ['mock', '模試']].map(([k, t]) => `<button class="${kind === k ? 'on' : ''}" data-act="trend-kind" data-k="${k}">${t}</button>`).join('')}</div></div>
+        ${overallChart(E.trendOverall(entries, kind, n => E.isCore(track, n)), kind, track)}
+        ${trendCards(ordered, entries, kind, track)}
+        <p class="muted">${kind === 'exam' ? '定期考査は得点率。灰色の点線は平均点(入れた教科だけ)。模試とはものさしがちがうので分けて見ます' : '模試は偏差値(50 が平均)。偏差値を入れていない模試は得点率で表示します'}</p></div>`;
     }
     if (latest) {
       const rows = latest.records.slice().sort((a, b) => orderIdx(a.subject) - orderIdx(b.subject)).map(x => {
@@ -922,6 +962,7 @@
     },
     track(el) { S.put('settings', 'main', { ...L.settings(), track: el.dataset.t }); commit(); },
     metric(el) { state.metric = el.dataset.k; render(); },
+    'trend-kind'(el) { state.trendKind = el.dataset.k; render(); },
     'books-open'() { state.books = true; render(); window.scrollTo(0, 0); },
     'books-close'() { state.books = false; render(); },
     goal(el) { const s = L.settings(); S.put('settings', 'main', { ...s, goalDeviation: Math.min(78, Math.max(45, (s.goalDeviation || 65) + Number(el.dataset.d))) }); commit(); },

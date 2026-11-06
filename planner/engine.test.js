@@ -248,5 +248,18 @@ test('予想ロードマップ:今の本から、日付は続き、目標まで'
 });
 test('プロフィールの苦手', () => eq(E.weakWordsFromProfile('高校1年\n苦手:現代文、確率'), ['現代文', '確率']));
 
+// ---- 定期考査と模試を分ける(TestTrend.swift と同じ)----
+const TT = [
+  { subject: '数学', date: '2026-01-01', testName: '中間', score: 80, max: 100, deviation: null, average: 60, isMock: false },
+  { subject: '国語', date: '2026-01-01', testName: '中間', score: 60, max: 100, deviation: null, average: 70, isMock: false },
+  { subject: '数学', date: '2026-01-05', testName: '期末', score: 45, max: 50, deviation: null, average: null, isMock: false },
+  { subject: '数学', date: '2026-01-03', testName: '模試', score: 70, max: 100, deviation: 64, average: null, isMock: true },
+  { subject: '英語', date: '2026-01-03', testName: '模試', score: 60, max: 100, deviation: 56, average: null, isMock: true },
+];
+test('定期考査の全体', () => { const o = E.trendOverall(TT, 'exam', s => s === '数学'); eq(o.map(x => [x.testName, x.you, x.core, x.average]), [['中間', 70, 80, 65], ['期末', 90, 90, null]]); });
+test('模試の全体は偏差値、平均は50', () => { const o = E.trendOverall(TT, 'mock', s => s === '数学'); eq([o.length, o[0].you, o[0].core, o[0].average, o[0].isDeviation], [1, 60, 64, 50, true]); });
+test('同じ数学でも考査と模試は別', () => { eq(E.trendSeries(TT, '数学', 'exam').points.map(p => p.value), [80, 90]); eq(E.trendSeries(TT, '数学', 'mock').points.map(p => p.value), [64]); });
+test('参考書には模試を優先', () => { eq(E.forBookAdvice(TT, e => e.isMock).records.length, 2); eq(E.forBookAdvice(TT.filter(e => !e.isMock), e => e.isMock).fromMock, false); });
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);
