@@ -478,7 +478,88 @@
   const num = (v) => Number.isInteger(v) ? String(v) : v.toFixed(1);
   const pct = (x) => x.max > 0 ? x.score / x.max * 100 : 0;
 
+  // ---------------- おすすめの参考書と予想ロードマップ(iOS版の BookAdviceView と同じ) ----------------
+
+  /** 参考書の一覧(catalog.json)。はじめて開いたときに読み込む */
+  let catalog = null;
+  function loadCatalog() {
+    if (catalog) return;
+    catalog = { loading: true, books: [] };
+    fetch('catalog.json?v=' + Date.now()).then(r => r.json()).then(c => { catalog = c; if (state.tab === 'analysis') render(); })
+      .catch(() => { catalog = { error: true, books: [] }; if (state.tab === 'analysis') render(); });
+  }
+
+  /** 日付を「1/7」の形に(今年でなければ「2027/1/7」) */
+  const ymd = (key) => { const d = E.toDate(key); return d.getFullYear() === new Date().getFullYear() ? `${d.getMonth() + 1}/${d.getDate()}` : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
+
+  /**
+   * 教科ごとに:今の偏差値の目安・今やる本と次の本(理由つき)・目標までの予想ロードマップ
+   * 偏差値の目安 = 新しい順に3回を 3:2:1(点数だけのテストは 35 + 得点率 × 0.3)
+   * 苦手分野 = 最新の分野別の得点で苦手だった分野 + プロフィールの「苦手:」
+   */
+  function booksHTML() {
+    loadCatalog();
+    const back = '<div class="row" style="margin-bottom:12px"><button class="secondary" data-act="books-close">‹ 分析</button><h2 style="margin:0;flex:1">おすすめの参考書</h2></div>';
+    if (!catalog || catalog.loading) return back + '<div class="card"><p class="muted">参考書の一覧を読み込んでいます…</p></div>';
+    if (catalog.error) return back + '<div class="card"><p class="bad">参考書の一覧を読めませんでした</p></div>';
+    const s = L.settings(), track = s.track || 'なし', goal = s.goalDeviation || 65;
+    const scores = S.all('scores');
+    const owned = L.materials().map(m => ({ subject: m.subject, name: m.name }));
+    const inCatalog = new Set(catalog.books.map(b => b.subject));
+    const subs = L.subjects().filter(x => inCatalog.has(x.name));
+    const ordered = subs.filter(x => E.isCore(track, x.name)).concat(subs.filter(x => !E.isCore(track, x.name)));
+    const profileWeak = E.weakWordsFromProfile(s.profile);
+    const dots = (level, c) => `<span class="lv">${[1, 2, 3, 4, 5].map(i => `<i style="background:${i <= level ? c : 'var(--line)'}"></i>`).join('')}</span>`;
+    let html = back + `<div class="card"><div class="row" style="justify-content:space-between"><b style="font-size:1.1rem">🏁 目標の偏差値 ${goal}</b>
+        <div class="row"><button class="secondary" style="min-height:36px;padding:2px 14px" data-act="goal" data-d="-1">−</button><button class="secondary" style="min-height:36px;padding:2px 14px" data-act="goal" data-d="1">＋</button></div></div>
+        <p class="muted" style="margin:6px 0 0">テストの結果(偏差値の目安)・苦手分野・持っている教材から、今やる本と次の本を選び、目標までの予想ロードマップを作ります</p></div>`;
+    ordered.forEach(sub => {
+      const c = color(sub.name);
+      const dev = E.bookDeviation(scores.filter(x => x.subject === sub.name).map(x => ({ date: x.date, score: x.score, max: x.max, deviation: E.effectiveDeviation(x) })));
+      const latest = scores.filter(x => x.subject === sub.name && x.fields && x.fields.length).sort((a, b) => b.date.localeCompare(a.date))[0];
+      const weak = (latest ? E.weakIn(latest.fields).map(f => f.name) : []).concat(profileWeak);
+      const advice = E.adviseBooks(sub.name, dev, weak, owned, catalog.books);
+      const road = E.bookRoadmap(sub.name, dev, goal, weak, owned, catalog.books, today());
+      html += `<div class="card"><div class="row" style="justify-content:space-between"><h3 class="bk-sub"><i style="background:${c}"></i>${esc(sub.name)}${E.isCore(track, sub.name) ? ' <span style="color:#f08a24">★</span>' : ''}</h3>
+          <b style="color:${c};font-size:.9rem">${dev != null ? `今の目安 偏差値 ${Math.round(dev)}` : `成績なし(${E.UNKNOWN_DEVIATION}として)`}</b></div>
+        ${advice.length ? advice.map(a => `<div class="bk-row"><span class="bk-kind" style="${a.kind === '今やる' ? `background:color-mix(in srgb, ${c} 15%, transparent);color:${c}` : ''}">${a.kind}</span>
+            <div style="flex:1"><b>${esc(a.book.name)}</b><div class="muted" style="font-size:.8rem">${esc(a.book.publisher)}・${esc(a.book.area)} ${dots(a.book.level, c)}</div>
+              <div style="font-size:.85rem">${esc(a.reasons.join('・'))}</div><div class="muted" style="font-size:.78rem">${esc(a.book.note)}</div></div>
+            <button class="secondary bk-add" data-act="book-add" data-id="${a.book.id}" ${owned.some(o => o.subject === a.book.subject && o.name === a.book.name) ? 'disabled' : ''}>＋ 教材に</button></div>`).join('')
+          : '<p class="muted">今の力に合う本は、もう持っています</p>'}
+        ${road.length ? `<div class="bk-road"><b class="muted" style="font-size:.8rem">予想ロードマップ</b>${road.map((r, i) => `<div class="bk-step"><span class="bk-dot" style="border-color:${c};background:${r.owned ? c : 'transparent'}"></span>${i < road.length - 1 ? `<span class="bk-line" style="background:${c}"></span>` : ''}
+            <div><b>${esc(r.book.name)}</b>${r.owned ? ` <small style="color:${c};font-weight:800">今の本</small>` : ''}<div class="muted" style="font-size:.8rem">${ymd(r.start)}〜${ymd(r.end)}・仕上げると偏差値 ${Math.round(r.deviationAfter)} くらい</div></div></div>`).join('')}
+          <p class="muted" style="font-size:.75rem">1冊 = 1周の目安 × 1.5(2周目の復習をふくむ)。偏差値は本の範囲の真ん中までとして計算した目安です</p></div>` : ''}</div>`;
+    });
+    html += `<div class="card"><b>参考書の一覧(${esc(catalog.updated)}更新・${catalog.books.length}冊)</b><p class="muted" style="font-size:.8rem">${esc(catalog.note)}</p>
+      <details><summary class="muted">参考にした記事</summary>${(catalog.sources || []).map(u => `<div style="font-size:.78rem;word-break:break-all"><a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></div>`).join('')}</details></div>`;
+    return html;
+  }
+
+  /**
+   * 成績の推移:教科ごとの小さなカード(最新の値・前回との差・小さな折れ線)
+   * 横は何回目のテストか、縦はその教科の値の 最小 − 5 〜 最大 + 5(得点率は 0〜100、偏差値は 20〜80 におさめる)
+   */
+  function trendCards(ordered, scores, metric, track) {
+    const value = (x) => metric === 'percent' ? pct(x) : E.effectiveDeviation(x);
+    return `<div class="trend-grid">${ordered.map(sub => {
+      const pts = scores.filter(x => x.subject === sub.name).sort((a, b) => a.date.localeCompare(b.date)).map(x => ({ v: value(x), name: x.testName })).filter(p => p.v != null);
+      if (!pts.length) return '';
+      const c = color(sub.name), last = pts[pts.length - 1].v, diff = pts.length >= 2 ? last - pts[pts.length - 2].v : null;
+      const [blo, bhi] = metric === 'percent' ? [0, 100] : [20, 80];
+      const lo = Math.max(blo, Math.min(...pts.map(p => p.v)) - 5), hi = Math.min(bhi, Math.max(...pts.map(p => p.v)) + 5);
+      const W = 200, H = 64, x = (i) => pts.length === 1 ? W / 2 : 8 + i * (W - 16) / (pts.length - 1), y = (v) => H - 6 - (v - lo) / Math.max(1, hi - lo) * (H - 12);
+      const line = pts.map((p, i) => `${x(i)},${y(p.v)}`).join(' ');
+      return `<div class="trend-card" style="--c:${c}"><div class="row" style="justify-content:space-between"><b><i class="dot" style="background:${c}"></i> ${esc(sub.name)}${E.isCore(track, sub.name) ? ' <span style="color:#f08a24">★</span>' : ''}</b><small class="muted">${pts.length}回</small></div>
+        <div class="trend-val">${metric === 'percent' ? Math.round(last) + '%' : last.toFixed(1)}${diff != null ? ` <small class="${diff >= 0 ? 'good' : 'bad'}">${diff >= 0 ? '↗ +' : '↘ '}${Math.round(diff)}</small>` : ''}</div>
+        <svg viewBox="0 0 ${W} ${H}" class="trend-svg"><polygon points="${x(0)},${H} ${line} ${x(pts.length - 1)},${H}" fill="${c}" fill-opacity=".12"/><polyline points="${line}" fill="none" stroke="${c}" stroke-width="2.5"/>
+          ${pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.v)}" r="3.5" fill="${c}"/>`).join('')}<text x="2" y="10" class="axis">${Math.round(hi)}</text><text x="2" y="${H - 2}" class="axis">${Math.round(lo)}</text></svg>
+        <small class="muted">${esc(pts[pts.length - 1].name)}</small></div>`;
+    }).join('')}</div>`;
+  }
+
   function renderAnalysis() {
+    if (state.books) return booksHTML();
     const subjects = L.subjects();
     const scores = S.all('scores');
     const track = L.settings().track || 'なし';
@@ -486,7 +567,8 @@
     // 主要教科(理系なら数学・理科・英語)を先に
     const ordered = subjects.filter(x => E.isCore(track, x.name)).concat(subjects.filter(x => !E.isCore(track, x.name)));
     const orderIdx = (name) => { const i = ordered.findIndex(x => x.name === name); return i < 0 ? 99 : i; };
-    let html = '';
+    let html = `<div class="card mrow" data-act="books-open" style="margin-bottom:16px"><span class="rm-icon" style="background:#5856d6">📚</span>
+      <div class="grow"><b>おすすめの参考書と予想ロードマップ</b><div class="muted">成績から、今やる本・次の本と目標までの道すじ</div></div><span class="muted">›</span></div>`;
     const latest = testGroups()[0];
     if (!scores.length) html += '<div class="card"><p class="muted">成績がまだありません(登録 → テストの結果)</p></div>';
     if (latest && track !== 'なし') {
@@ -501,12 +583,9 @@
     }
     if (scores.length) {
       const metric = state.metric || 'percent';
-      const series = ordered.map(s => ({ label: (E.isCore(track, s.name) ? '★' : '') + s.name, color: color(s.name),
-        points: scores.filter(x => x.subject === s.name).map(x => ({ x: E.toDate(x.date).getTime(), y: metric === 'percent' ? pct(x) : E.effectiveDeviation(x) })).filter(p => p.y != null) }))
-        .filter(s => s.points.length);
       html += `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">成績の推移</h2>
         <div class="row">${[['percent', '得点率'], ['deviation', '偏差値']].map(([k, t]) => `<button class="${metric === k ? '' : 'secondary'}" style="min-height:32px;padding:2px 12px" data-act="metric" data-k="${k}">${t}</button>`).join('')}</div></div>
-        ${Charts.lines(series, metric === 'percent' ? { yMax: 100 } : { yMin: 20, yMax: 80 })}
+        ${trendCards(ordered, scores, metric, track)}
         ${metric === 'deviation' ? '<p class="muted">考査は、順位か平均点から見積もった偏差値の目安</p>' : ''}</div>`;
     }
     if (latest) {
@@ -570,7 +649,8 @@
         ${[['commute', '通学(片道・分)'], ['living', '食事・お風呂など(分)'], ['periodLength', '1コマ(分)'], ['periodBreak', '休み時間(分)'], ['lunchAfter', '昼休みは何時間目のあと'], ['lunchLength', '昼休み(分)'], ['afterLast', '終礼など(分)']].map(([k, l]) => `<div><label>${l}</label><input type="number" data-set="${k}" value="${s[k]}"></div>`).join('')}
         <div><label>1時間目の始まり</label><input type="time" data-set="firstPeriodStart" data-time="1" value="${toTime(s.firstPeriodStart)}"></div>
       </div></div>
-      <div class="card"><h2>文系・理系</h2><div class="row">${['理系', '文系', 'なし'].map(t => `<button class="${(s.track || 'なし') === t ? '' : 'secondary'}" data-act="track" data-t="${t}">${t}</button>`).join('')}</div>
+      <div class="card"><h2>文系・理系</h2><div class="row">${['理系', '文系', 'なし'].map(t => `<button class="${(s.track || 'なし') === t ? '' : 'secondary'}" data-act="track" data-t="${t}">${t}</button>`).join('')}
+        <label style="margin-left:auto">目標の偏差値 <input type="number" min="45" max="78" data-set="goalDeviation" value="${s.goalDeviation || 65}" style="width:5em"></label></div>
         <p class="muted">理系なら数学・理科の優先度を1.2倍にして、分析でも数学・理科・英語を先に出します</p></div>
       <div class="card"><h2>毎週の予定(部活・塾)</h2>
         <table>${weekly.map(w => `<tr><td>${DAYS[w.weekday]}</td><td>${esc(w.title)}</td><td>${toTime(w.start)}〜${toTime(w.end)}</td><td class="num"><button class="danger" data-act="del" data-c="weeklyEvents" data-id="${w.id}">消す</button></td></tr>`).join('') || '<tr><td class="muted">まだありません</td></tr>'}</table>
@@ -842,6 +922,18 @@
     },
     track(el) { S.put('settings', 'main', { ...L.settings(), track: el.dataset.t }); commit(); },
     metric(el) { state.metric = el.dataset.k; render(); },
+    'books-open'() { state.books = true; render(); window.scrollTo(0, 0); },
+    'books-close'() { state.books = false; render(); },
+    goal(el) { const s = L.settings(); S.put('settings', 'main', { ...s, goalDeviation: Math.min(78, Math.max(45, (s.goalDeviation || 65) + Number(el.dataset.d))) }); commit(); },
+    /** おすすめの本を教材に足す(「後回し」で入れるので、今日のノルマはすぐには変わらない) */
+    'book-add'(el) {
+      const b = catalog.books.find(x => x.id === el.dataset.id);
+      if (!b) return;
+      S.put('materials', S.newID(), { total: 0, done: 0, route: [], deadline: null, subject: b.subject, name: b.name, role: '後回し', kind: '問題集',
+        period: '', note: `おすすめから追加(${b.publisher}・偏差値 ${b.devLo}〜${b.devHi})`, routeOrder: null, amount: 0, unit: 'ページ', every: 0, group: '',
+        weekendOnly: false, activeFrom: null, activeUntil: null, daily: false, laps: [], order: L.materials().reduce((m, x) => Math.max(m, x.order || 0), -1) + 1 });
+      commit();
+    },
     async login() { await auth('signIn'); },
     async signup() { await auth('signUp'); },
     logout() { Auth.signOut(); render(); },

@@ -5,7 +5,7 @@
 
   /** 生活時間などの設定(なければ iOS版と同じ初期値) */
   const DEFAULT_SETTINGS = { wake: 390, sleep: 1380, schoolStart: 500, schoolEnd: 950, commute: 20, living: 150,
-    firstPeriodStart: 520, periodLength: 50, periodBreak: 10, lunchAfter: 4, lunchLength: 45, afterLast: 15, track: '理系' };
+    firstPeriodStart: 520, periodLength: 50, periodBreak: 10, lunchAfter: 4, lunchLength: 45, afterLast: 15, track: '理系', goalDeviation: 65 };
 
   const L = {
     today: () => E.keyOf(new Date()),
