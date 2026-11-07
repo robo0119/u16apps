@@ -218,13 +218,13 @@
 
   // ---- 画面 ----
 
-  const ICON = { listening: '👂', speaking: '🗣️', scoring: '⏳', idle: '🎧', done: '🎧' };
+  const ICON = { listening: 'ear', speaking: 'voice', scoring: 'clock', idle: 'headphones', done: 'headphones' };
   /** 真ん中の言葉 */
   function label() {
     if (state.phase === 'listening') return '聞いて';
     if (state.phase === 'speaking') return state.mode === 'shadow' ? 'ついて言って' : 'まねして言って';
     if (state.phase === 'scoring') return '採点中';
-    return '英文を見ずに、音だけで';
+    return '音だけで';
   }
 
   /** 進み具合のバー(お手本・あなた)だけ描き直す */
@@ -241,25 +241,24 @@
   function render() {
     const box = $('shadow');
     if (!box) return;
-    if (!Recognition || !('speechSynthesis' in window)) { box.innerHTML = '<h2>シャドーイング</h2><p class="muted">このブラウザは声の入力に非対応(Chrome・Edge・Safari で使えます)</p>'; return; }
+    if (!Recognition || !('speechSynthesis' in window)) { box.innerHTML = '<h2>シャドーイング</h2><p class="muted">このブラウザでは使えません(Chrome・Edge・Safari で開いてください)</p>'; return; }
     const run = running();
     const seg = (act, items, cur) => `<div class="seg">${items.map(([v, t]) => `<button data-sh="${act}" data-v="${v}" class="${String(v) === String(cur) ? 'on' : ''}">${t}</button>`).join('')}</div>`;
-    let html = `<p class="muted" style="margin:0">英文を見ずに、お手本の音だけを聞いて言います。リピート = 聞いてからまねる、シャドーイング = 少し遅れて同時に言う</p>`;
+    let html = '';
     if (!run) {
       html += seg('mode', [['repeat', 'リピート'], ['shadow', 'シャドーイング']], state.mode);
       html += seg('rate', RATES.map(r => [r, `${r}倍`]), state.rate);
-      html += `<div class="row" style="margin-top:8px"><label class="secondary button" style="cursor:pointer">🎵 ${state.audioURL ? '音声を入れかえる' : '音声ファイルをお手本にする'}<input id="sh-audio" type="file" accept="audio/*" hidden></label>
+      html += `<div class="row" style="margin-top:8px"><label class="secondary button" style="cursor:pointer">${Icon('music')} ${state.audioURL ? '音声を入れかえる' : '音声ファイルをお手本にする'}<input id="sh-audio" type="file" accept="audio/*" hidden></label>
         ${state.audioURL ? `<span class="muted">${esc(state.audioName)}</span><button class="danger" data-sh="noaudio">機械の声にもどす</button>` : ''}</div>`;
-      if (state.audioURL) html += '<p class="muted">本物の音声がお手本(音声は端末の中だけ。遅れの採点はしません)</p>';
-      if (state.mode === 'shadow') html += '<p class="sh-warn">🎧 イヤホン推奨(お手本の声がマイクに入らないように)</p>';
+      if (state.mode === 'shadow') html += `<p class="sh-warn">${Icon('headphones')} イヤホン推奨</p>`;
     }
-    html += `<div class="sh-center"><div class="sh-circle ${run ? 'on' : ''} ${state.phase === 'speaking' ? 'speak' : ''}">${ICON[state.phase]}</div>
+    html += `<div class="sh-center"><div class="sh-circle ${run ? 'on' : ''} ${state.phase === 'speaking' ? 'speak' : ''}">${Icon(ICON[state.phase])}</div>
       <b>${label()}</b><span class="muted">${tokenize($('passage').value).length} 語</span></div>`;
     if (run) html += '<div id="sh-progress"></div>';
     if (state.error) html += `<p class="bad">${esc(state.error)}</p>`;
     html += '<div class="row" style="justify-content:center;margin-top:12px">' + (run
-      ? `<button class="secondary" data-sh="cancel">✕ やめる</button>${state.phase === 'speaking' ? '<button data-sh="finish">✓ 終わる</button>' : ''}`
-      : `<button data-sh="start">${state.phase === 'done' ? '↺ もう一度' : '▶ スタート'}</button>`) + '</div>';
+      ? `<button class="secondary" data-sh="cancel">やめる</button>${state.phase === 'speaking' ? '<button data-sh="finish">終わる</button>' : ''}`
+      : `<button data-sh="start">${state.phase === 'done' ? `${Icon('refresh')} もう一度` : `${Icon('play')} スタート`}</button>`) + '</div>';
     box.innerHTML = html;
     renderProgress();
   }

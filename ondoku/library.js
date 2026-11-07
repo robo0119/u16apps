@@ -79,7 +79,7 @@
       const signup = state.auth === 'signup';
       html += `<div class="auth-box">
         <div class="seg auth-seg"><button class="${signup ? '' : 'on'}" data-lib="mode" data-m="login">ログイン</button><button class="${signup ? 'on' : ''}" data-lib="mode" data-m="signup">新しく登録</button></div>
-        <p class="muted" style="margin:6px 0 10px">${signup ? 'メールアドレスとパスワード(6文字以上)で登録します。文章はあなたのアカウントだけに保存され、ほかの人からは見えません。' : 'ログインすると、ここに入れた文章がiPhoneのRecitoと同期します。ログインしなくても練習はできます。'}</p>
+        <p class="muted" style="margin:6px 0 10px">${signup ? '文章はあなたのアカウントだけに保存されます' : 'iPhoneのRecitoと文章を同期できます'}</p>
         <form class="auth-form" data-form="auth">
           <input id="lib-email" type="email" placeholder="メールアドレス" autocomplete="username" inputmode="email" autocapitalize="off" required>
           <input id="lib-pass" type="password" placeholder="パスワード${signup ? '(6文字以上)' : ''}" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="${signup ? 6 : 1}" required>
@@ -88,7 +88,7 @@
         ${signup ? '' : '<button class="ghost" data-lib="reset" style="margin-top:4px">パスワードを忘れた</button>'}</div>`;
     } else {
       html += `<div class="account"><span class="avatar">${esc((user.email || '?')[0].toUpperCase())}</span>
-        <div class="grow"><b>${esc(user.email)}</b><div class="muted">${Sync.isSyncing ? '同期中…' : Sync.lastError ? `<span class="bad">${esc(Sync.lastError)}</span>` : Sync.lastSync ? '同期済み ✓' : 'ログイン中'}</div></div>
+        <div class="grow"><b>${esc(user.email)}</b><div class="muted">${Sync.isSyncing ? '同期中…' : Sync.lastError ? `<span class="bad">${esc(Sync.lastError)}</span>` : Sync.lastSync ? '同期済み' : 'ログイン中'}</div></div>
         <button class="secondary small" data-lib="sync">同期</button><button class="ghost small" data-lib="logout">ログアウト</button></div>`;
     }
     if (state.message) html += `<p class="bad">${esc(state.message)}</p>`;
@@ -101,7 +101,7 @@
         <textarea id="lib-text" spellcheck="false" style="margin-top:8px;font-family:Georgia,serif;min-height:200px" placeholder="英文を貼り付け(空行で段落に分かれます)">${esc(e.text)}</textarea>
         <div class="row" style="margin-top:8px"><button data-lib="save">保存</button><button class="secondary" data-lib="cancel">やめる</button></div></div>`;
     } else {
-      html += '<button data-lib="new">＋ 文章を追加</button>';
+      html += `<button data-lib="new">${Icon('plus')} 文章を追加</button>`;
     }
     CATEGORIES.forEach(cat => {
       const items = list.filter(p => (p.category || 'その他') === cat);

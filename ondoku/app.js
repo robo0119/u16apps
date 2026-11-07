@@ -239,11 +239,10 @@
     const streaks = recallStreaks(text), masks = recallMasks(streaks, state.recall);
     const rec = recommendedLevel(text), hidden = masks.filter(m => m !== 'show').length;
     const learned = streaks.filter(s => s >= LEARNED_STREAK).length;
-    box.innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">🧠 暗唱ステップ</h2>
-        ${rec !== state.recall ? `<button class="chip" data-ow="recall" data-lv="${rec}">おすすめ: ${rec}</button>` : ''}</div>
+    box.innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">暗唱ステップ</h2>
+        ${rec !== state.recall ? `<button class="chip" data-ow="recall" data-lv="${rec}">おすすめ ${rec}</button>` : ''}</div>
       <div class="seg" style="margin:10px 0 6px">${[0, 1, 2, 3, 4].map(l => `<button class="${l === state.recall ? 'on' : ''}" data-ow="recall" data-lv="${l}">${l}</button>`).join('')}</div>
-      <b>${state.recall}:${RECALL_NAMES[state.recall]}${state.recall ? `・${hidden}語を隠しています` : ''}</b>
-      <p class="muted" style="margin:2px 0 0">${state.recall ? '言えた単語から姿が現れます。90%以上で次のステップへ' : `読めた単語を覚えたら、少しずつ隠して暗唱へ。覚えた単語(2回続けて読めた)は今 ${learned}語`}</p>`;
+      <div class="row" style="justify-content:space-between"><b>${RECALL_NAMES[state.recall]}</b><span class="muted">${state.recall ? `${hidden}語を隠す` : `覚えた ${learned}語`}</span></div>`;
   }
 
   // ---------------- 記録(このブラウザの中だけ) ----------------
@@ -288,7 +287,7 @@
   /** 結果のHTML。opts.mode:'read' か 'shadow'、opts.prev:前回の正確さ */
   function resultHTML(r, opts = {}) {
     state.result = r;   // 「赤い単語だけで練習」で使う(音読・シャドーイングどちらの結果でも)
-    if (!r.words.length || !r.spoken.trim()) return '<div class="card"><p class="warn">聞き取れませんでした。マイクに近づいて、もう一度どうぞ</p></div>';
+    if (!r.words.length || !r.spoken.trim()) return '<div class="card"><p class="warn">聞き取れませんでした。もう一度どうぞ</p></div>';
     const [g, gc] = grade(r.acc);
     const missed = [...new Set(r.words.filter(w => !w.ok).map(w => w.norm))];
     const diff = opts.prev != null ? Math.round(r.acc - opts.prev) : null;
@@ -300,23 +299,23 @@
         <div class="score-donut">${Charts.donut([{ label: 'ok', value: r.read, color: '#22994f' }, { label: 'miss', value: r.words.length - r.read, color: '#e2474f' }], { center: `${Math.round(r.acc)}`, sub: '% 正確' })}</div>
         <div class="score-side">
           <div class="grade" style="color:${gc}">${g}</div>
-          ${diff != null ? `<div class="${diff >= 0 ? 'good' : 'bad'} diff">${diff >= 0 ? '↗' : '↘'} 前回より ${diff >= 0 ? '+' : ''}${diff}</div>` : ''}
+          ${diff != null ? `<div class="${diff >= 0 ? 'good' : 'bad'} diff">${Icon(diff >= 0 ? 'up' : 'down')} 前回より ${diff >= 0 ? '+' : ''}${diff}</div>` : ''}
           <div class="big">${Math.round(r.wpm)}</div><div class="muted">語 / 分(速さ)</div>
-          <div class="facts"><span class="good">✓ ${r.read} 語 読めた</span><span class="bad">✕ ${r.words.length - r.read} 語 まだ</span><span class="muted">⏱ ${Math.round(r.seconds)} 秒</span>
-            ${showLag ? `<span>↔ お手本から ${lagText(r.lag)}</span>` : ''}</div>
+          <div class="facts"><span class="good">${Icon('check')} ${r.read} 語 読めた</span><span class="bad">${Icon('x')} ${r.words.length - r.read} 語 まだ</span><span class="muted">${Icon('clock')} ${Math.round(r.seconds)} 秒</span>
+            ${showLag ? `<span>${Icon('swap')} お手本との差 ${lagText(r.lag)}</span>` : ''}</div>
         </div>
       </div>
       ${paceBar(r.wpm)}
     </div>
     <div class="card">
-      <div class="row" style="justify-content:space-between"><span class="muted">赤をタップで発音</span><button class="ghost" data-say="${esc(r.words.map(w => w.display).join(' '))}" data-rate="1">🔊 全文</button></div>
+      <div class="row" style="justify-content:space-between"><span class="muted">赤い単語をタップで発音</span><button class="ghost" data-say="${esc(r.words.map(w => w.display).join(' '))}" data-rate="1">${Icon('speaker')} 全文</button></div>
       <p class="words">${r.words.map(w => w.ok ? `<span class="w-ok">${esc(w.display)}</span>` : `<span class="w-miss" data-say="${esc(w.norm)}">${esc(w.display)}</span>`).join(' ')}</p>
     </div>
-    ${missed.length ? `<div class="card"><h2>練習する単語</h2>${missed.map(w => `<button class="miss-chip" data-say="${esc(w)}">🔊 ${esc(w)}</button>`).join('')}
+    ${missed.length ? `<div class="card"><h2>練習する単語</h2>${missed.map(w => `<button class="miss-chip" data-say="${esc(w)}">${Icon('speaker')} ${esc(w)}</button>`).join('')}
       <div class="row" style="margin-top:10px"><button class="secondary" data-ow="practice-missed">赤い単語だけで練習</button></div></div>` : ''}
     ${r.sentences.length > 1 ? `<div class="card"><h2>文ごとの正確さ</h2><table>
       ${r.sentences.map(s => `<tr><td class="sent">${esc(s.text)}</td><td class="num"><span class="pill ${s.acc >= 85 ? 'ok' : s.acc < 70 ? 'ng' : ''}">${Math.round(s.acc)}%</span></td>${showLag ? `<td class="num muted">${lagText(s.lag)}</td>` : ''}</tr>`).join('')}</table>
-      ${showLag ? '<p class="muted">右は、お手本からの遅れ(目安)</p>' : ''}</div>` : ''}
+</div>` : ''}
     ${sound ? `<div class="card tip"><b>今回つまずいた音:${esc(sound.name)}</b><p>${esc(sound.advice)}(例:${esc(sound.examples)})</p></div>` : ''}`;
   }
 
@@ -329,22 +328,27 @@
   /** 英文(入力欄の中身) */
   const passage = () => $('passage').value.trim();
 
+  let lastShown = null;   // 最後に表示した英文(変わったときだけ演出する)
   /** 英文の表示(読む前・読んでいる途中は色つき) */
   function renderPassage(colors) {
     const words = tokenize(passage());
     $('count').textContent = `${words.length} 語`;
     // 暗唱ステップ:読めた単語・抜けた単語は姿を見せ、まだの単語は隠したまま(シャドーイングでは使わない)
     const masks = state.mode === 'read' && state.recall > 0 ? recallMasks(recallStreaks(passage()), state.recall) : null;
+    // 英文が変わったときだけ、単語が順番に現れる(1語 18ミリ秒ずつ、最大 0.7秒)。読んでいる途中の色付けでは動かさない
+    const fresh = !colors && passage() !== lastShown;
+    lastShown = passage();
     $('pview').innerHTML = words.length
       ? words.map((w, i) => {
           const c = colors ? colors[i] : '';
           const mask = masks && c !== 'read' && c !== 'miss' ? masks[i] : 'show';
-          return `<span class="pw ${c} ${mask !== 'show' ? 'masked' : ''}">${esc(recallDisplay(w.display, mask))}</span>`;
+          const anim = fresh ? ` pw-in" style="animation-delay:${Math.min(i * 18, 700)}ms` : '';
+          return `<span class="pw ${c} ${mask !== 'show' ? 'masked' : ''}${anim}">${esc(recallDisplay(w.display, mask))}</span>`;
         }).join(' ')
-      : '<span class="muted">英文を入れてください(✎ 編集 から貼り付け)</span>';
+      : '<span class="muted">「編集」から英文を貼り付け</span>';
     $('pview').classList.toggle('hidden', state.editing);
     $('passage').classList.toggle('hidden', !state.editing);
-    $('edit').textContent = state.editing ? '✓ 完了' : '✎ 編集';
+    $('edit').innerHTML = state.editing ? `${Icon('check')} 完了` : `${Icon('edit')} 編集`;
     document.querySelectorAll('[data-sample]').forEach(b => b.classList.toggle('on', SAMPLES[Number(b.dataset.sample)].text === passage()));
   }
 
@@ -398,7 +402,7 @@
       // つなぎ直しても直らないエラー(マイクが使えない・ネットにつながらない)は、そこで止めて知らせる
       rec.onerror = (e) => {
         const message = {
-          'not-allowed': 'マイクが使えません。アドレスバーの🔒からマイクを許可してください',
+          'not-allowed': 'マイクが使えません。アドレスバーの鍵のマークから許可してください',
           'service-not-allowed': 'このブラウザでは声の入力が使えません(Chrome・Edge・Safari で開いてください)',
           'audio-capture': 'マイクが見つかりません',
           'network': '声の入力にはインターネットが必要です。つながっているか確かめてください',
@@ -444,8 +448,9 @@
   /** マイクのボタンの見た目 */
   function updateMic() {
     $('mic').classList.toggle('on', state.listening);
-    $('mic').innerHTML = state.listening ? '<span class="stop"></span>' : '🎤';
-    $('mic-label').textContent = state.listening ? '終わったらタップ' : 'タップして音読';
+    $('mic').innerHTML = state.listening ? '<span class="eq"><i></i><i></i><i></i><i></i><i></i></span>' : Icon('mic');
+    $('mic').setAttribute('aria-label', state.listening ? '止める' : '音読をはじめる');
+    $('mic-label').textContent = state.listening ? '聞いています — タップで終了' : 'タップして読む';
     $('progress-wrap').classList.toggle('hidden', !state.listening);
   }
 
@@ -456,6 +461,7 @@
     state.recall = recommendedLevel(r.passage);   // 次はおすすめのステップで
     renderRecall();
     $('result').innerHTML = resultHTML(r, { mode: 'read', prev: previousAccuracy(r.passage) });
+    if (window.Motion) { Motion.reveal($('result')); Motion.countUp($('result').querySelector('.donut-center')); Motion.countUp($('result').querySelector('.big')); }
     // 何も聞き取れなかったときは、英文を赤くしない(元の色にもどす)
     renderPassage(spoken.trim() ? r.words.map(w => w.ok ? 'read' : 'miss') : null);
     $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -478,7 +484,7 @@
   /** 記録のタブ:回数・連続日数・正確さと速さのグラフ・最近の練習 */
   function renderHistory() {
     const list = history();
-    if (!list.length) { $('tab-history').innerHTML = '<div class="card empty"><div class="big-icon">📈</div><b>まだ記録がありません</b><p class="muted">練習すると、ここに上達のグラフが出ます</p></div>'; return; }
+    if (!list.length) { $('tab-history').innerHTML = `<div class="card empty"><div class="big-icon">${Icon('chart')}</div><b>まだ記録がありません</b></div>`; return; }
     const t = (h) => new Date(h.d).getTime();
     const recent = list.slice(-5), avg = (a, k) => a.reduce((s, h) => s + h[k], 0) / a.length;
     $('tab-history').innerHTML = `
@@ -497,7 +503,7 @@
           <div class="hpass">${esc(h.passage.slice(0, 70))}${h.passage.length > 70 ? '…' : ''}</div></div>
         <div class="hnum"><b class="${h.acc >= 85 ? 'good' : h.acc < 70 ? 'bad' : ''}">${Math.round(h.acc)}%</b><span class="muted">${h.wpm}語/分</span>
           <button class="ghost" data-ow="again" data-i="${list.length - 1 - i}">もう一度</button></div></div>`).join('')}
-        <p class="muted" style="margin-top:10px">記録はこのブラウザの中だけに保存されます <button class="ghost" data-ow="clear-history">記録を消す</button></p></div>`;
+        <p style="margin:10px 0 0;text-align:right"><button class="ghost" data-ow="clear-history">記録を消す</button></p></div>`;
   }
 
   // ---------------- 苦手の画面 ----------------
@@ -505,7 +511,7 @@
   /** 苦手のタブ:苦手な音の診断(最近30回)と、苦手な単語ノート */
   function renderWeak() {
     const list = history().slice(-30);
-    if (!list.length) { $('tab-weak').innerHTML = '<div class="card empty"><div class="big-icon">🔍</div><b>まだ記録がありません</b><p class="muted">何回か練習すると、苦手な音と単語がわかります</p></div>'; return; }
+    if (!list.length) { $('tab-weak').innerHTML = `<div class="card empty"><div class="big-icon">${Icon('target')}</div><b>まだ記録がありません</b></div>`; return; }
     const results = list.map(h => ({ words: align(h.passage, h.spoken) }));
     const { groups, overall, weakest } = soundStats(results);
     const count = {};
@@ -514,14 +520,14 @@
     $('tab-weak').innerHTML = `
       <div class="card diag"><span class="muted">あなたの苦手な音</span>
         ${weakest ? `<div class="diag-name">${esc(weakest.name)}</div><b>ミス率 ${Math.round(weakest.rate * 100)}%(平均 ${Math.round(overall * 100)}%)</b><p>${esc(weakest.advice)}</p>
-          <div>${weakest.missedWords.slice(0, 5).map(w => `<button class="miss-chip" data-say="${esc(w)}">🔊 ${esc(w)}</button>`).join('')}</div>`
+          <div>${weakest.missedWords.slice(0, 5).map(w => `<button class="miss-chip" data-say="${esc(w)}">${Icon('speaker')} ${esc(w)}</button>`).join('')}</div>`
           : '<div class="diag-name good">特に苦手な音はありません</div>'}</div>
       <div class="card"><h2>音ごとのミス率</h2>${Charts.bars(groups.map(g => ({ label: g.name, value: Math.round(g.rate * 100),
           color: g.total < MIN_SAMPLES ? 'color-mix(in srgb, var(--muted) 35%, transparent)' : g.rate > overall ? '#e2474f' : '#22994f', note: `${g.missed}/${g.total}` })), { max: 100 })}
-        <p class="muted">赤 = 平均(${Math.round(overall * 100)}%)より多い・${MIN_SAMPLES}語未満は灰色。最近${list.length}回の練習から</p></div>
+        <p class="muted">赤:平均 ${Math.round(overall * 100)}% より多い</p></div>
       <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">苦手な単語</h2>
-        ${words.length ? '<button data-ow="practice-weak">🎤 苦手な単語で練習</button>' : ''}</div>
-        ${words.length ? `<div class="weak-list">${words.map(w => `<button class="weak-word" data-say="${esc(w)}"><span>🔊 ${esc(w)}</span><b>×${count[w]}</b></button>`).join('')}</div>` : '<p class="muted">なし</p>'}</div>`;
+        ${words.length ? `<button data-ow="practice-weak">${Icon('mic')} 苦手な単語で練習</button>` : ''}</div>
+        ${words.length ? `<div class="weak-list">${words.map(w => `<button class="weak-word" data-say="${esc(w)}"><span>${Icon('speaker')} ${esc(w)}</span><b>×${count[w]}</b></button>`).join('')}</div>` : '<p class="muted">なし</p>'}</div>`;
   }
 
   // ---------------- タブ ----------------
@@ -535,6 +541,7 @@
     if (tab === 'weak') renderWeak();
     if (tab === 'interpret' && window.RecitoInterpret) RecitoInterpret.render();
     if (tab === 'challenge' && window.RecitoChallenge) RecitoChallenge.render();
+    if (window.Motion) Motion.reveal($(`tab-${tab}`));
     try { localStorage.setItem('ondoku.tab', tab); } catch (e) { /* なし */ }
   }
 
@@ -565,7 +572,7 @@
         <div class="card"><h2>速さ(語/分)</h2>${Charts.lines([{ label: '速さ', color: '#4466cc', points: recs.map(r => ({ x: t(r), y: r.wpm })) }], { yMax: Math.max(60, Math.ceil(Math.max(...recs.map(r => r.wpm), 0) / 20) * 20) })}</div>
       </div>
       <div class="card"><h2>よく読めない単語</h2>
-        ${misses.length ? misses.map(([w, c]) => `<button class="miss-chip" data-say="${esc(w)}">🔊 ${esc(w)} <small>×${c}</small></button>`).join('') : '<p class="muted">なし</p>'}
+        ${misses.length ? misses.map(([w, c]) => `<button class="miss-chip" data-say="${esc(w)}">${Icon('speaker')} ${esc(w)} <small>×${c}</small></button>`).join('') : '<p class="muted">なし</p>'}
       </div></main>`;
   }
 
@@ -573,7 +580,7 @@
 
   async function renderSend() {
     const text = passage();
-    if (!text) { $('send').innerHTML = '<p class="muted">英文を入れると、QRコードが出ます</p>'; return; }
+    if (!text) { $('send').innerHTML = '<p class="muted">英文がありません</p>'; return; }
     if (!Bridge.supported) { $('send').innerHTML = '<p class="warn">このブラウザは非対応</p>'; return; }
     const payload = await Bridge.encode({ v: 1, kind: 'ondoku', passage: text });
     Bridge.renderSendPanel($('send'), Bridge.appLink(SCHEME, 'import', payload), 'iPhoneで読むとRecitoに入ります');

@@ -17,9 +17,9 @@
   <meta property="og:description" content="英文を声に出して読むと、その場で採点。読めた単語は緑、言えなかった単語は赤。">
   <link rel="icon" href="../icons/ondokuchecker.png">
   <link rel="apple-touch-icon" href="../icons/ondokuchecker.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261107a">
-  <script src="../common/gate.js?v=20261107a"></script>
-  <script src="../common/guard.js?v=20261107a"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261107b">
+  <script src="../common/gate.js?v=20261107b"></script>
+  <script src="../common/guard.js?v=20261107b"></script>
   <style>
     /* --accent は文字の色、--brand は塗りの色(ボタン・上のバー)。暗い画面では文字だけ明るくする */
     :root { --accent: #142a5c; --brand: #142a5c; --serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif; }
@@ -54,14 +54,41 @@
     .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: #fff; font-weight: 800; flex: none; }
     button.small { min-height: 34px; padding: 4px 12px; }
     /* はじめに */
-    .intro { display: flex; gap: 16px; align-items: center; background: linear-gradient(135deg, #142a5c, #2f4f9c); color: #fff; }
-    .intro h2 { color: #fff; font-size: 1.3rem; margin: 0 0 4px; }
-    .intro p { margin: 0; opacity: .9; font-size: .92rem; }
-    .intro .legend { display: flex; gap: 10px; margin-top: 8px; font-family: var(--serif); font-size: 1.05rem; }
-    .intro .legend b { background: rgba(255,255,255,.95); padding: 0 8px; border-radius: 6px; }
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 16px; padding: 0; }
-    .step { background: var(--card); border-radius: 14px; padding: 10px 12px; font-size: .82rem; color: var(--muted); }
-    .step b { display: block; color: var(--text); font-size: .95rem; }
+    /* ---- はじめの大きな見出し(紺のグラデーション) ---- */
+    .hero { position: relative; overflow: hidden; border-radius: 26px; padding: 30px 24px 26px; margin-bottom: 16px; color: #fff;
+      background: radial-gradient(120% 140% at 100% 0%, #3d63c9 0%, transparent 55%), linear-gradient(135deg, #0f2150, #1f3d8a); }
+    .hero::after { content: ""; position: absolute; right: -40px; bottom: -60px; width: 220px; height: 220px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,.16), transparent 70%); animation: float 7s ease-in-out infinite; }
+    .eyebrow { margin: 0 0 6px; font-size: .78rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; opacity: .7; }
+    .hero-title { margin: 0; font-size: clamp(1.7rem, 5.2vw, 2.5rem); line-height: 1.25; font-weight: 900; letter-spacing: -.01em; color: #fff; }
+    .hero .legend { display: flex; gap: 10px; margin-top: 16px; font-family: var(--serif); font-size: 1.1rem; }
+    .hero .legend b { background: rgba(255,255,255,.95); padding: 1px 10px; border-radius: 8px; }
+    .lg-ok { color: #22994f; } .lg-miss { color: #e2474f; }
+    @keyframes float { 50% { transform: translate(-14px, -16px); } }
+    /* ---- 文字と部品が下からふわっと現れる(motion.js) ---- */
+    .rv { opacity: 0; transform: translateY(30px); }
+    .rv.in { opacity: 1; transform: none; transition: opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1); }
+    .ch { display: inline-block; opacity: 0; transform: translateY(.45em); animation: ch-in .5s cubic-bezier(.2,.8,.2,1) forwards; }
+    @keyframes ch-in { to { opacity: 1; transform: none; } }
+    .pw-in { display: inline-block; animation: ch-in .45s cubic-bezier(.2,.8,.2,1) both; opacity: 0; transform: translateY(.4em); }
+    /* ---- 線のアイコン ---- */
+    .ic { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; flex: none; }
+    .icon-btn { background: transparent; color: var(--accent); min-height: 40px; width: 40px; padding: 0; border-radius: 50%; }
+    .icon-btn .ic { width: 24px; height: 24px; }
+    .topbar .icon-btn { margin-left: 2px; }
+    /* ---- 使い方(下から出るシート) ---- */
+    .sheet { border: none; padding: 0; width: min(560px, 100%); max-height: 86vh; margin: auto auto 0; border-radius: 26px 26px 0 0; background: var(--card); color: var(--text);
+      box-shadow: 0 -10px 40px rgba(0,0,0,.25); }
+    @media (min-width: 640px) { .sheet { margin: auto; border-radius: 26px; } }
+    .sheet[open] { animation: sheet-in .35s cubic-bezier(.2,.8,.2,1); }
+    .sheet::backdrop { background: rgba(10,14,30,.45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+    @keyframes sheet-in { from { transform: translateY(40px); opacity: 0; } }
+    .sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 6px; position: sticky; top: 0; background: var(--card); }
+    .sheet-head h2 { margin: 0; font-size: 1.5rem; font-weight: 900; }
+    .sheet-body { padding: 0 20px calc(24px + env(safe-area-inset-bottom)); overflow: auto; }
+    .sheet-body h3 { margin: 18px 0 4px; font-size: 1rem; color: var(--accent); }
+    .sheet-body p { margin: 0 0 6px; font-size: .92rem; }
+    .formula { background: var(--bg); border-radius: 12px; padding: 8px 12px; font-weight: 700; font-size: .85rem !important; }
     .support { background: color-mix(in srgb, var(--warn) 12%, var(--card)); }
     /* 英文 */
     .passage-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -86,12 +113,20 @@
     #shadow .seg { margin: 8px 0 0; }
     /* マイク */
     .mic-area { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; }
-    #mic { width: 92px; height: 92px; border-radius: 50%; font-size: 2.3rem; padding: 0; background: var(--brand); box-shadow: 0 8px 22px color-mix(in srgb, var(--brand) 35%, transparent); transition: transform .15s; }
-    #mic:active { transform: scale(.95); }
-    #mic.on { background: var(--bad); box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 45%, transparent); animation: ring 1.6s infinite; }
-    #mic .stop { display: inline-block; width: 28px; height: 28px; border-radius: 6px; background: #fff; }
+    /* マイク:紺の丸に線のマイク。聞いている間は、音に合わせて動くような棒になる */
+    #mic { position: relative; width: 96px; height: 96px; border-radius: 50%; padding: 0; color: #fff;
+      background: radial-gradient(circle at 30% 25%, #3a5fbf, #142a5c 70%); box-shadow: 0 12px 28px rgba(20,42,92,.35), inset 0 1px 0 rgba(255,255,255,.25); }
+    #mic .ic { width: 38px; height: 38px; stroke-width: 1.8; }
+    #mic::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+    #mic.on { background: radial-gradient(circle at 30% 25%, #ff6b72, #d63641 70%); box-shadow: 0 12px 28px rgba(214,54,65,.35); }
+    #mic.on::before { border-color: color-mix(in srgb, var(--bad) 40%, transparent); animation: ring2 1.4s ease-out infinite; }
+    @keyframes ring2 { from { transform: scale(.92); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+    .eq { display: flex; gap: 5px; align-items: center; height: 36px; }
+    .eq i { width: 5px; height: 100%; border-radius: 3px; background: #fff; animation: eq 1s ease-in-out infinite; }
+    .eq i:nth-child(2) { animation-delay: -.8s; } .eq i:nth-child(3) { animation-delay: -.4s; } .eq i:nth-child(4) { animation-delay: -.6s; } .eq i:nth-child(5) { animation-delay: -.2s; }
+    @keyframes eq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
     @keyframes ring { 70% { box-shadow: 0 0 0 18px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
-    #mic-label { font-weight: 800; color: var(--accent); }
+    #mic-label { font-weight: 800; color: var(--accent); margin-top: 6px; }
     /* 結果 */
     .score { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
     .score-donut { width: 170px; flex: none; }
@@ -134,14 +169,15 @@
     .weak-word { display: flex; justify-content: space-between; background: var(--bg); color: var(--text); border-radius: 12px; min-height: 44px; padding: 6px 12px; font-family: var(--serif); font-size: 1.05rem; }
     .weak-word b { color: var(--bad); font-family: inherit; font-size: .85rem; }
     .empty { text-align: center; padding: 36px 18px; }
-    .big-icon { font-size: 2.6rem; }
+    .big-icon { color: var(--muted); } .big-icon .ic { width: 44px; height: 44px; stroke-width: 1.6; }
     details.send summary { cursor: pointer; font-weight: 800; }
     /* シャドーイング */
     .sh-warn { color: #d97a00; font-weight: 700; font-size: .9rem; margin: 8px 0 0; }
     .sh-center { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 20px 0 8px; }
     .sh-center b { font-size: 1.2rem; color: var(--accent); }
-    .sh-circle { width: 150px; height: 150px; border-radius: 50%; display: grid; place-items: center; font-size: 3.8rem; background: color-mix(in srgb, var(--accent) 12%, transparent); }
-    .sh-circle.speak { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+    .sh-circle { width: 150px; height: 150px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .sh-circle .ic { width: 58px; height: 58px; stroke-width: 1.6; }
+    .sh-circle.speak { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
     .sh-circle.on { animation: sh-pulse 1.8s ease-in-out infinite; }
     @keyframes sh-pulse { 50% { transform: scale(1.06); } }
     .sh-bar { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
@@ -181,7 +217,17 @@
     .ip-word { font-family: var(--serif); font-size: 2.2rem; color: var(--accent); }
     /* チャレンジ(文字とボタンは大きく) */
     .ch-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
-    .ch-head h2 { margin: 0; color: var(--accent); font-size: 1.3rem; }
+    .ch-head h2 { margin: 0; color: var(--text); font-size: clamp(1.6rem, 5vw, 2.1rem); font-weight: 900; letter-spacing: -.01em; }
+    .ch-eyebrow { margin: 0; font-size: .74rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); opacity: .75; }
+    .lv { display: inline-flex; gap: 4px; } .lv i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); } .lv i.on { background: #f08a24; }
+    .ch-check { position: absolute; top: 12px; right: 12px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--card); }
+    .ch-check .ic { width: 16px; height: 16px; stroke-width: 3; }
+    .ch-crown { color: #e0a800; margin-right: 4px; }
+    .ch-rank-letter { font-size: 6rem; font-weight: 900; line-height: 1; margin-top: 8px; background: linear-gradient(160deg, var(--rk1), var(--rk2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+      animation: rank-in .7s cubic-bezier(.2,1.5,.4,1) both; --rk1: #6b7a99; --rk2: #3b4560; }
+    .r-S { --rk1: #ffd54a; --rk2: #f08a24; } .r-A { --rk1: #ff7b8a; --rk2: #d63641; } .r-B { --rk1: #6aa8ff; --rk2: #2c4c9a; } .r-C { --rk1: #5fd08a; --rk2: #1f8a4c; }
+    @keyframes rank-in { from { transform: scale(2.2) rotate(-8deg); opacity: 0; filter: blur(6px); } to { transform: none; opacity: 1; filter: none; } }
+    .ch-place.top1 { background: linear-gradient(160deg, #ffd54a, #f0a020); color: #fff; } .ch-place.top2 { background: linear-gradient(160deg, #d6dbe4, #9aa3b2); color: #fff; } .ch-place.top3 { background: linear-gradient(160deg, #e8a77a, #b86a3c); color: #fff; }
     .ch-head button { white-space: nowrap; flex: none; }
     .ch-seg button { min-height: 52px; font-size: 1.1rem; }
     .ch-name { width: 100%; font-size: 1.3rem; font-weight: 800; padding: 14px; margin-bottom: 10px; border-radius: 14px; border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
@@ -191,7 +237,6 @@
     .ch-topic small { color: #f08a24; font-weight: 800; }
     .ch-topic span { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; line-height: 1.35; }
     .ch-topic.on { border-color: var(--accent); background: var(--accent-soft); }
-    .ch-topic i { position: absolute; top: 10px; right: 14px; font-style: normal; font-weight: 900; }
     .ch-sticky { position: sticky; bottom: 0; padding: 10px 0; background: linear-gradient(transparent, var(--bg) 30%); }
     .ch-start { width: 100%; min-height: 64px; font-size: 1.5rem; font-weight: 900; border-radius: 18px; }
     .ch-play { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
@@ -200,21 +245,21 @@
     .ch-text { font-family: var(--serif); font-size: 2.3rem; font-weight: 800; line-height: 1.45; color: var(--accent); background: var(--card); border-radius: 22px; padding: 22px; width: 100%; }
     .ch-text .read { color: var(--good); } .ch-text .miss { color: var(--bad); }
     .ch-timer { font-size: 2.6rem; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--muted); }
-    .ch-mic { width: 140px; height: 140px; border-radius: 50%; font-size: 3.4rem; padding: 0; background: var(--brand); box-shadow: 0 10px 28px rgba(0,0,0,.25); }
-    .ch-play.p1 .ch-mic { background: #f08a24; }
-    .ch-mic.on { background: var(--bad) !important; animation: ring 1.6s infinite; }
-    .ch-mic .stop { display: inline-block; width: 40px; height: 40px; border-radius: 8px; background: #fff; }
+    .ch-mic { width: 140px; height: 140px; border-radius: 50%; padding: 0; color: #fff; background: radial-gradient(circle at 30% 25%, #3a5fbf, #142a5c 70%); box-shadow: 0 14px 32px rgba(20,42,92,.35), inset 0 1px 0 rgba(255,255,255,.25); }
+    .ch-mic .ic { width: 54px; height: 54px; stroke-width: 1.7; } .ch-mic .eq { height: 50px; gap: 7px; } .ch-mic .eq i { width: 7px; }
+    .ch-play.p1 .ch-mic { background: radial-gradient(circle at 30% 25%, #ffb15a, #e0701a 70%); }
+    .ch-mic.on { background: radial-gradient(circle at 30% 25%, #ff6b72, #d63641 70%) !important; animation: ring 1.6s infinite; }
     .ch-tip { font-size: 1.25rem; font-weight: 800; color: var(--accent); margin: 0; }
-    .ch-winner { text-align: center; font-size: 2.2rem; margin: 8px 0 16px; color: var(--accent); animation: pop .6s cubic-bezier(.2,1.6,.4,1) both; }
+    .ch-winner { text-align: center; margin: 8px 0 18px; animation: pop .6s cubic-bezier(.2,1.6,.4,1) both; }
+    .ch-winner h2 { margin: 2px 0 0; font-size: clamp(2rem, 7vw, 2.8rem); font-weight: 900; color: var(--text); }
     .ch-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
     .ch-card { background: var(--card); border-radius: 24px; padding: 20px; text-align: center; border: 3px solid color-mix(in srgb, var(--accent) 25%, transparent); animation: pop .6s cubic-bezier(.2,1.6,.4,1) both; }
     .ch-card.p1 { border-color: color-mix(in srgb, #f08a24 35%, transparent); }
     .ch-card.crown { border-color: #f5c518; box-shadow: 0 0 0 4px color-mix(in srgb, #f5c518 30%, transparent); }
     .ch-cname { font-size: 1.4rem; color: var(--accent); }
-    .ch-card.p1 .ch-cname, .ch-card.p1 .ch-title { color: #f08a24; }
+    .ch-card.p1 .ch-cname { color: #f08a24; }
     .ch-perfect { font-size: .75rem; font-weight: 900; padding: 2px 10px; border-radius: 999px; background: color-mix(in srgb, #f5c518 45%, transparent); }
-    .ch-emoji { font-size: 4rem; line-height: 1.2; margin-top: 6px; }
-    .ch-title { font-size: 1.9rem; font-weight: 900; color: var(--accent); }
+    .ch-title { font-size: .75rem; font-weight: 800; letter-spacing: .3em; color: var(--muted); margin-bottom: 4px; }
     .ch-points { font-size: 4.6rem; font-weight: 900; line-height: 1.1; color: var(--accent); font-variant-numeric: tabular-nums; }
     .ch-stats { display: flex; justify-content: center; gap: 22px; margin-top: 10px; }
     .ch-stats b { display: block; font-size: 1.4rem; }
@@ -224,7 +269,7 @@
     .ch-confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
     .ch-filter { width: 100%; margin-bottom: 12px; min-height: 44px; }
     .ch-rank { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-    .ch-place { font-size: 1.6rem; width: 44px; text-align: center; font-weight: 900; }
+    .ch-place { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 1rem; font-weight: 900; background: var(--bg); color: var(--muted); flex: none; }
     .ch-rpoints { font-size: 1.5rem; color: var(--accent); font-variant-numeric: tabular-nums; }
     @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     @media (max-width: 560px) {
@@ -239,11 +284,10 @@
       main { padding: 12px max(12px, env(safe-area-inset-left)); }
       .ch-text { font-size: 1.8rem; }
       .ch-points { font-size: 3.6rem; }
-      .steps { grid-template-columns: 1fr; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       #pview { font-size: 1.3rem; }
       .seg button { font-size: .85rem; }
-      .intro { flex-direction: column; align-items: flex-start; }
+      .hero { padding: 24px 20px 22px; border-radius: 22px; }
     }
   </style>
 </head>
@@ -252,6 +296,7 @@
     <picture><source srcset="../icons/ondokuchecker-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/ondokuchecker.png" alt=""></picture>
     <h1>Recito</h1>
     <a class="home" href="../">Sotaのapp</a>
+    <button class="icon-btn" id="help-open" aria-label="使い方"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/></svg></button>
   </header>
   <section id="report" class="hidden"><main></main></section>
 
@@ -266,17 +311,10 @@
     </nav>
     <main>
       <section id="tab-practice">
-        <div class="card intro">
-          <div>
-            <h2>英文を声に出して読むと、その場で採点</h2>
-            <p>読めた単語は緑、飛ばした・言えなかった単語は赤。正確さと速さがわかります。</p>
-            <div class="legend"><b style="color:#22994f">read</b><b style="color:#e2474f">missed</b></div>
-          </div>
-        </div>
-        <div class="steps">
-          <div class="step"><b>① 英文をえらぶ</b>見本・ライブラリ・自分で貼り付け</div>
-          <div class="step"><b>② 🎤 で読む</b>読んだ所から色が変わる</div>
-          <div class="step"><b>③ 暗唱ステップへ</b>覚えた単語から隠れていき、最後は暗唱</div>
+        <div class="hero">
+          <p class="eyebrow">Read aloud. Get scored.</p>
+          <h2 class="hero-title" data-split>声に出して読むと、その場で採点。</h2>
+          <div class="legend"><b class="lg-ok">read</b><b class="lg-miss">missed</b></div>
         </div>
         <div class="card support hidden" id="support"></div>
 
@@ -284,25 +322,25 @@
           <div class="passage-head">
             <h2>英文</h2>
             <span class="muted" id="count"></span>
-            <button class="ghost" id="listen">🔊 お手本</button>
-            <button class="ghost" id="edit">✎ 編集</button>
+            <button class="ghost" id="listen"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg> お手本</button>
+            <button class="ghost" id="edit">編集</button>
           </div>
-          <div class="chips"><span class="muted" style="align-self:center;font-size:.8rem">見本:</span><span id="samples" class="chips" style="margin:0"></span></div>
+          <div class="chips"><span id="samples" class="chips" style="margin:0"></span></div>
           <div id="pview"></div>
           <textarea id="passage" class="hidden" spellcheck="false" placeholder="英文を貼り付け"></textarea>
           <div id="progress-wrap" class="hidden"><div id="progress"></div></div>
         </div>
 
         <div class="seg">
-          <button data-mode="read">🎤 音読</button>
-          <button data-mode="shadow">🎧 シャドーイング</button>
+          <button data-mode="read">音読</button>
+          <button data-mode="shadow">シャドーイング</button>
         </div>
 
         <div class="card" id="recall"></div>
         <div class="card" id="read-panel">
           <div class="mic-area">
-            <button id="mic" aria-label="音読をはじめる">🎤</button>
-            <span id="mic-label">タップして音読</span>
+            <button id="mic" aria-label="音読をはじめる"></button>
+            <span id="mic-label">タップして読む</span>
             <span class="muted" id="mic-note"></span>
           </div>
         </div>
@@ -314,8 +352,8 @@
       <section id="tab-library" class="hidden">
         <div class="card" id="library"></div>
         <div class="card no-print">
-          <details class="send"><summary>📱 iPhoneのRecitoへ送る</summary>
-            <p class="muted">練習タブの英文を、QRコードでiPhoneのアプリに送れます(同じアカウントでログインすれば、ライブラリも自動で同期)</p>
+          <details class="send"><summary>iPhoneのRecitoへ送る</summary>
+            <p class="muted">QRコードをiPhoneのカメラで読み取ると、今の英文がアプリに入ります</p>
             <div id="send"></div></details>
         </div>
       </section>
@@ -326,17 +364,41 @@
       <section id="tab-challenge" class="hidden"></section>
     </main>
   </div>
-  <footer>Recito — 英語の音読練習</footer>
+  <footer>Recito</footer>
 
-  <script src="../common/qr.js?v=20261107a"></script>
-  <script src="../common/bridge.js?v=20261107a"></script>
-  <script src="../common/charts.js?v=20261107a"></script>
-  <script src="../common/firebase-config.js?v=20261107a"></script>
-  <script src="../common/sync.js?v=20261107a"></script>
-  <script src="library.js?v=20261107a"></script>
-  <script src="app.js?v=20261107a"></script>
-  <script src="shadow.js?v=20261107a"></script>
-  <script src="interpret.js?v=20261107a"></script>
-  <script src="challenge.js?v=20261107a"></script>
+  <!-- 使い方(説明はここにまとめる) -->
+  <dialog id="help" class="sheet">
+    <div class="sheet-head"><h2>使い方</h2><button class="icon-btn" id="help-close" aria-label="閉じる"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <h3>音読</h3>
+      <p>英文を選んでマイクをタップし、声に出して読みます。読めた単語は緑、言えなかった単語は赤になります。赤い単語をタップすると発音が聞けます。</p>
+      <p class="formula">正確さ = 読めた単語 ÷ 全部の単語<br>速さ = 読めた単語 ÷ 読んだ時間(分)</p>
+      <h3>暗唱ステップ</h3>
+      <p>0(全文)から 4(暗唱)まで。2回続けて読めた単語から先に隠れます。90%以上で次のステップがおすすめに出ます。</p>
+      <h3>シャドーイング</h3>
+      <p>英文を見ずに、お手本の音だけで練習します。リピートは聞いてからまねる、シャドーイングは少し遅れて同時に言います。イヤホンを使ってください。</p>
+      <h3>英文解釈</h3>
+      <p>単語をなぞって、節に［ ］、句に( )を付けます。ヒントは自動の判定なので、まちがうこともあります。</p>
+      <p class="formula"><span class="bk-c">［ ］節</span> 主語と動詞があるまとまり<br><span class="bk-p">( )句</span> 主語と動詞がないまとまり</p>
+      <h3>チャレンジ</h3>
+      <p>早口言葉を正しく、速く読みます。</p>
+      <p class="formula">点数 = 正確さ × 10 × 速さの倍率(0.5〜1.5倍)<br>最高 1500点 ・ S 1350〜 / A 1200〜 / B 1000〜 / C 800〜 / D 600〜</p>
+      <h3>保存</h3>
+      <p>ライブラリの文章はアカウントに、記録・苦手・ランキングはこのブラウザに保存されます。</p>
+    </div>
+  </dialog>
+
+  <script src="icons.js?v=20261107b"></script>
+  <script src="../common/qr.js?v=20261107b"></script>
+  <script src="../common/bridge.js?v=20261107b"></script>
+  <script src="../common/charts.js?v=20261107b"></script>
+  <script src="../common/firebase-config.js?v=20261107b"></script>
+  <script src="../common/sync.js?v=20261107b"></script>
+  <script src="library.js?v=20261107b"></script>
+  <script src="app.js?v=20261107b"></script>
+  <script src="shadow.js?v=20261107b"></script>
+  <script src="interpret.js?v=20261107b"></script>
+  <script src="challenge.js?v=20261107b"></script>
+  <script src="motion.js?v=20261107b"></script>
 </body>
 </html>

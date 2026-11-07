@@ -30,15 +30,17 @@
   const speedFactor = (seconds, words) => Math.min(1.5, Math.max(0.5, words * 0.4 / Math.max(seconds, 0.1)));
   const points = (accuracy, seconds, words) => words > 0 && accuracy > 0 ? Math.round(Math.min(100, accuracy) * 10 * speedFactor(seconds, words)) : 0;
 
-  /** 称号(点数で決まる。実在の試験の級は使わない) */
+  /** ランク(点数で決まる。実在の試験の級は使わない):S 1350〜 / A 1200〜 / B 1000〜 / C 800〜 / D 600〜 / E それ未満 */
   function title(p) {
-    if (p >= 1350) return ['早口の神', '👑'];
-    if (p >= 1200) return ['舌の魔術師', '🪄'];
-    if (p >= 1000) return ['なめらか名人', '🌊'];
-    if (p >= 800) return ['スラスラ選手', '🏃'];
-    if (p >= 600) return ['がんばり屋', '💪'];
-    return ['これからの星', '🌱'];
+    if (p >= 1350) return ['S'];
+    if (p >= 1200) return ['A'];
+    if (p >= 1000) return ['B'];
+    if (p >= 800) return ['C'];
+    if (p >= 600) return ['D'];
+    return ['E'];
   }
+  /** むずかしさ(1〜3)を点で表す */
+  const level = (n) => `<span class="lv">${[1, 2, 3].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
 
   /** 2人対戦の勝ち負け(1・2、引き分けは 0):点数 → 正確さ → 時間の短いほう */
   function winner(a, b) {
@@ -88,16 +90,15 @@
   function setupHTML() {
     const custom = customText();
     const card = (id, text, label) => `<button class="ch-topic ${state.topic === id ? 'on' : ''}" data-ch="topic" data-id="${id}">
-      <small>${label}</small><span>${esc(text)}</span>${state.topic === id ? '<i>✓</i>' : ''}</button>`;
-    return `<div class="ch-head"><h2>英語の早口言葉を、正しく・速く!</h2><button class="secondary" data-ch="ranking">🏆 ランキング</button></div>
-      <div class="seg ch-seg">${[[false, 'ひとりで'], [true, '2人で対戦']].map(([v, t]) => `<button class="${state.duel === v ? 'on' : ''}" data-ch="duel" data-v="${v}">${t}</button>`).join('')}</div>
+      <small>${label}</small><span>${esc(text)}</span>${state.topic === id ? `<em class="ch-check">${Icon('check')}</em>` : ''}</button>`;
+    return `<div class="ch-head"><div><p class="ch-eyebrow">Tongue Twister</p><h2>早口チャレンジ</h2></div><button class="secondary" data-ch="ranking">${Icon('trophy')} ランキング</button></div>
+      <div class="seg ch-seg">${[[false, 'ひとり'], [true, '2人で対戦']].map(([v, t]) => `<button class="${state.duel === v ? 'on' : ''}" data-ch="duel" data-v="${v}">${t}</button>`).join('')}</div>
       <input class="ch-name" id="ch-name0" value="${esc(names[0])}" placeholder="1人目のニックネーム" maxlength="16">
       ${state.duel ? `<input class="ch-name p2" id="ch-name1" value="${esc(names[1])}" placeholder="2人目のニックネーム" maxlength="16">` : ''}
       <h3>お題</h3>
-      <div class="ch-topics">${TWISTERS.map(t => card(t.id, t.text, '★'.repeat(t.stars) + '☆'.repeat(3 - t.stars))).join('')}
-        ${custom ? card('custom', custom, '📷 練習の英文') : ''}</div>
-      <p class="muted">点数 = 正確さ × 10 × 速さの倍率(0.5〜1.5倍)。最大1500点</p>
-      <div class="ch-sticky"><button class="ch-start" data-ch="start">▶ スタート</button></div>`;
+      <div class="ch-topics">${TWISTERS.map(t => card(t.id, t.text, level(t.stars))).join('')}
+        ${custom ? card('custom', custom, '練習中の英文') : ''}</div>
+      <div class="ch-sticky"><button class="ch-start" data-ch="start">${Icon('play')} スタート</button></div>`;
   }
 
   /** 1人ぶんの挑戦の画面:大きなお題・時間・大きなマイク */
@@ -107,8 +108,8 @@
       <h2 class="ch-turn">${esc(names[state.player])} の番</h2>
       <div class="ch-text" id="ch-text">${tokens.map((t, i) => `<span data-i="${i}">${esc(t.display)}</span>`).join(' ')}</div>
       <div class="ch-timer" id="ch-timer">0.0 秒</div>
-      <button class="ch-mic ${state.listening ? 'on' : ''}" data-ch="mic" aria-label="${state.listening ? '終わる' : '読み始める'}">${state.listening ? '<span class="stop"></span>' : '🎤'}</button>
-      <p class="ch-tip" id="ch-tip">${state.listening ? '最後まで読むと自動で止まります' : 'タップしたら、一気に読もう!'}</p>
+      <button class="ch-mic ${state.listening ? 'on' : ''}" data-ch="mic" aria-label="${state.listening ? '終わる' : '読み始める'}">${state.listening ? '<span class="eq"><i></i><i></i><i></i><i></i><i></i></span>' : Icon('mic')}</button>
+      <p class="ch-tip" id="ch-tip">${state.listening ? '最後まで読むと止まります' : 'タップしてスタート'}</p>
       <p class="bad" id="ch-err"></p>
       <button class="ghost" data-ch="quit">やめる</button></div>`;
   }
@@ -119,29 +120,29 @@
     let head = '';
     if (state.duel && r.length === 2) {
       const w = winner(r[0], r[1]);
-      head = `<h2 class="ch-winner">${w ? `🏆 ${esc(r[w - 1].name)} の勝ち!` : '🤝 引き分け!'}</h2>`;
+      head = `<div class="ch-winner"><p class="ch-eyebrow">${w ? 'Winner' : 'Draw'}</p><h2>${w ? esc(r[w - 1].name) : '引き分け'}</h2></div>`;
       r.forEach((x, i) => { x.crown = w === i + 1; });
     }
     return `${head}<div class="ch-cards">${r.map((x, i) => {
-      const [name, emoji] = title(x.points);
+      const [rank] = title(x.points);
       return `<div class="ch-card p${i} ${x.crown ? 'crown' : ''}" style="animation-delay:${i * 0.25}s">
-        <div class="row" style="justify-content:space-between"><b class="ch-cname">${esc(x.name)} ${x.crown ? '👑' : ''}</b>${x.accuracy >= 100 ? '<span class="ch-perfect">PERFECT</span>' : ''}</div>
-        <div class="ch-emoji">${emoji}</div><div class="ch-title">${esc(name)}</div>
+        <div class="row" style="justify-content:space-between"><b class="ch-cname">${x.crown ? Icon('crown', 'ch-crown') : ''}${esc(x.name)}</b>${x.accuracy >= 100 ? '<span class="ch-perfect">PERFECT</span>' : ''}</div>
+        <div class="ch-rank-letter r-${rank}" style="animation-delay:${0.35 + i * 0.25}s">${rank}</div><div class="ch-title">RANK</div>
         <div class="ch-points" data-to="${x.points}">0</div><div class="muted" style="margin-top:-8px">点</div>
         <div class="ch-stats"><div><b>${Math.round(x.accuracy)}%</b><small>正確さ</small></div><div><b>${x.seconds.toFixed(1)}秒</b><small>時間</small></div><div><b>×${speedFactor(x.seconds, x.words.length).toFixed(2)}</b><small>速さ</small></div></div>
         ${x.words.some(w => !w.ok) ? `<p class="bad">言えなかった:${x.words.filter(w => !w.ok).map(w => esc(w.display)).join(' ')}</p>` : ''}</div>`;
     }).join('')}</div>
-    <div class="row ch-after"><button data-ch="again">↺ もう一度</button><button class="secondary" data-ch="ranking">🏆 ランキング</button><button class="ghost" data-ch="setup">お題をえらぶ</button></div>
+    <div class="row ch-after"><button data-ch="again">${Icon('refresh')} もう一度</button><button class="secondary" data-ch="ranking">${Icon('trophy')} ランキング</button><button class="ghost" data-ch="setup">お題を変える</button></div>
     <canvas id="ch-confetti" class="ch-confetti"></canvas>`;
   }
 
   /** ランキング(ニックネーム付き。お題ごとにも。リセットできる) */
   function rankingHTML() {
     const list = sorted(ranking().filter(r => state.filter === 'all' || r.topic === state.filter)).slice(0, 20);
-    return `<div class="ch-head"><h2>🏆 ランキング</h2><button class="secondary" data-ch="close-ranking">閉じる</button></div>
+    return `<div class="ch-head"><div><p class="ch-eyebrow">Ranking</p><h2>ランキング</h2></div><button class="secondary" data-ch="close-ranking">閉じる</button></div>
       <select id="ch-filter" class="ch-filter"><option value="all">すべてのお題</option>${TWISTERS.map(t => `<option value="${t.id}" ${state.filter === t.id ? 'selected' : ''}>${esc(t.text.slice(0, 30))}…</option>`).join('')}</select>
-      <div class="card">${list.length ? list.map((r, i) => `<div class="ch-rank"><span class="ch-place">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span>
-        <div style="flex:1"><b>${esc(r.name)}</b><div class="muted" style="font-size:.8rem">${esc(title(r.points)[0])}・${Math.round(r.accuracy)}%・${r.seconds.toFixed(1)}秒</div></div>
+      <div class="card">${list.length ? list.map((r, i) => `<div class="ch-rank"><span class="ch-place ${i < 3 ? `top${i + 1}` : ''}">${i + 1}</span>
+        <div style="flex:1"><b>${esc(r.name)}</b><div class="muted" style="font-size:.8rem">ランク ${esc(title(r.points)[0])}・${Math.round(r.accuracy)}%・${r.seconds.toFixed(1)}秒</div></div>
         <b class="ch-rpoints">${r.points}</b></div>`).join('') : '<p class="muted">まだ記録がありません</p>'}</div>
       <p style="text-align:center"><button class="danger" data-ch="reset">ランキングをリセット</button></p>`;
   }
@@ -167,7 +168,7 @@
         document.querySelectorAll('#ch-text span').forEach((el, i) => { el.className = colors[i] || ''; });
         if (colors[colors.length - 1] === 'read') setTimeout(finish, 600);
       };
-      rec.onerror = (e) => { if (['not-allowed', 'service-not-allowed', 'audio-capture', 'network'].includes(e.error)) { const err = $('ch-err'); if (err) err.textContent = 'マイクが使えません(アドレスバーの🔒から許可してください)'; state.listening = false; } };
+      rec.onerror = (e) => { if (['not-allowed', 'service-not-allowed', 'audio-capture', 'network'].includes(e.error)) { const err = $('ch-err'); if (err) err.textContent = 'マイクが使えません(アドレスバーの鍵のマークから許可してください)'; state.listening = false; } };
       // 黙ると止まることがあるので、読んでいるあいだはつなぎ直す
       rec.onend = () => { if (state.listening && !finished && Date.now() - started < 60000) { joiner.commit(); try { begin(); } catch (err) { finish(); } } };
       rec.start();

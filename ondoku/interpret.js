@@ -415,7 +415,7 @@
     if (!box) return;
     state.passage = $('passage').value.trim();
     const list = sentences();
-    if (!list.length) { box.innerHTML = '<div class="card empty"><div class="big-icon">📝</div><b>英文がありません</b><p class="muted">練習のタブで英文を用意してください</p></div>'; return; }
+    if (!list.length) { box.innerHTML = `<div class="card empty"><div class="big-icon">${Icon('edit')}</div><b>英文がありません</b></div>`; return; }
     state.index = Math.min(state.index, list.length - 1);
     const sentence = list[state.index], words = wordsOf(sentence);
     const saved = loadAll();
@@ -427,40 +427,37 @@
     const sel = state.sel;
     let html = `<div class="card">
       <div class="row" style="justify-content:space-between">
-        <button class="ghost big-arrow" data-ip="prev" ${state.index === 0 ? 'disabled' : ''}>◀</button>
+        <button class="ghost big-arrow" data-ip="prev" ${state.index === 0 ? 'disabled' : ''}><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
         <div style="text-align:center"><b style="font-size:1.1rem">${state.index + 1} / ${list.length} 文</b><div class="muted" style="font-size:.8rem">保存した文 ${list.filter(s => saved[s]).length}</div></div>
-        <button class="ghost big-arrow" data-ip="next" ${state.index >= list.length - 1 ? 'disabled' : ''}>▶</button>
+        <button class="ghost big-arrow" data-ip="next" ${state.index >= list.length - 1 ? 'disabled' : ''}><svg class="ic" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
       </div>
-      <div class="seg" style="margin:12px 0">${[['clause', '［ ］節'], ['phrase', '( )句'], ['erase', '消す'], ['info', '🔍 調べる']].map(([k, t]) => `<button class="${state.tool === k ? 'on' : ''}" data-ip="tool" data-k="${k}">${t}</button>`).join('')}</div>
-      <div class="ip-toggles">${[['pos', '品詞'], ['roles', 'SVOC'], ['arrows', '修飾の矢印']].map(([k, t]) => `<button class="ip-toggle ${view[k] ? 'on' : ''}" data-ip="view" data-k="${k}">${view[k] ? '✓' : '○'} ${t}</button>`).join('')}</div>
-      <p class="muted" style="margin:0 0 6px">${state.tool === 'info' ? '👆 単語をタップすると、くわしい情報が出ます' : `✍️ 単語をなぞると${state.tool === 'erase' ? '、重なる記号を消します' : '記号を付けます(同じ所をもう一度なぞると消えます)'}`}</p>
+      <div class="seg" style="margin:12px 0">${[['clause', '［ ］節'], ['phrase', '( )句'], ['erase', '消す'], ['info', '調べる']].map(([k, t]) => `<button class="${state.tool === k ? 'on' : ''}" data-ip="tool" data-k="${k}">${t}</button>`).join('')}</div>
+      <div class="ip-toggles">${[['pos', '品詞'], ['roles', 'SVOC'], ['arrows', '修飾の矢印']].map(([k, t]) => `<button class="ip-toggle ${view[k] ? 'on' : ''}" data-ip="view" data-k="${k}">${view[k] ? Icon('check') : ''} ${t}</button>`).join('')}</div>
+      <p class="muted" style="margin:0 0 6px">${state.tool === 'info' ? '単語をタップ' : state.tool === 'erase' ? 'なぞって消す' : 'なぞって付ける'}</p>
       <div class="ip-wrap ${view.arrows ? 'with-arrows' : ''}"><svg id="ip-arrows" class="ip-arrows"></svg>
       <div id="ip-words" class="ip-words">${words.map((w, i) => {
         const role = view.roles ? a.roles[i] : null;
         const cross = view.arrows ? a.arrows.filter(([f]) => f === i) : [];
         return `<span class="iw ${sel && i >= sel[0] && i <= sel[1] ? 'sel' : ''}" data-i="${i}"><span class="iw-text">${m[i].before.map(open).join('')}${esc(w)}${m[i].after.map(close).join('')}</span>${view.pos || view.roles ? `<span class="iw-sub">${role ? `<b class="role role-${role}">${role}</b>` : ''}${view.pos ? `<small>${esc(partOfSpeech(a.words, a.tags, i).split('(')[0])}</small>` : ''}</span>` : ''}${cross.map(([, t]) => `<span class="iw-to" data-from="${i}" data-to="${t}">→ ${esc(bare(words[t]))}</span>`).join('')}</span>`;
       }).join(' ')}</div></div>
-      ${view.arrows && a.arrows.length ? '<p class="muted" style="font-size:.78rem;color:#9b51e0;margin:6px 0 0">矢印:修飾する語 → くわしくされる語</p>' : ''}
+      ${view.arrows && a.arrows.length ? '<p class="muted" style="font-size:.78rem;color:#9b51e0;margin:6px 0 0">→ 修飾</p>' : ''}
     </div>
     <div class="row" style="gap:10px;margin-bottom:16px">
-      <button style="flex:1" data-ip="speak">🔊 区切って読む</button>
-      <button class="secondary" style="flex:1" data-ip="hint">💡 ${state.showHint ? 'ヒントを隠す' : 'ヒントとくらべる'}</button>
+      <button style="flex:1" data-ip="speak">${Icon('speaker')} 区切って読む</button>
+      <button class="secondary" style="flex:1" data-ip="hint">${Icon('bulb')} ${state.showHint ? 'ヒントを隠す' : 'ヒントとくらべる'}</button>
     </div>
     ${spans.length ? '<p style="text-align:center;margin-top:-6px"><button class="danger" data-ip="clear">この文の記号を全部消す</button></p>' : ''}`;
     if (state.showHint) {
       const hints = hintsOf(sentence), r = compare(spans, hints);
       const mm = marks(words.length, r.matched), mu = marks(words.length, r.onlyUser), mh = marks(words.length, r.onlyHint);
       const col = (list, cls, fn) => list.map(s => `<b class="bk ${cls}">${fn(s)}</b>`).join('');
-      html += `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0;color:#f08a24">💡 ヒントとくらべる</h2>
+      html += `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0;color:#f08a24">ヒントとくらべる</h2>
           <b style="font-size:1.4rem;color:${r.rate >= 0.8 ? 'var(--good)' : r.rate >= 0.5 ? '#f08a24' : 'var(--bad)'}">一致 ${Math.round(r.rate * 100)}%</b></div>
         <p class="ip-compare">${words.map((w, i) => col(mm[i].before, 'bk-ok', openOf) + col(mu[i].before, 'bk-me', openOf) + col(mh[i].before, 'bk-hint', openOf) + esc(w)
           + col(mh[i].after, 'bk-hint', closeOf) + col(mu[i].after, 'bk-me', closeOf) + col(mm[i].after, 'bk-ok', closeOf)).join(' ')}</p>
-        <p style="font-weight:700;font-size:.85rem"><span class="good">✓ 一致 ${r.matched.length}</span>  <span style="color:#f08a24">＋ 自分だけ ${r.onlyUser.length}</span>  <span class="muted">− ヒントだけ ${r.onlyHint.length}</span></p>
-        <p class="muted ip-serif">ヒント:${esc(renderText(words, hints))}</p>
-        <p class="muted" style="font-size:.78rem">ヒントは品詞の推定とルールによる自動判定です(ブラウザでは単語の表とつづりから品詞を推定)。まちがうこともあるので、考える手がかりに使ってください</p></div>`;
+        <p style="font-weight:700;font-size:.85rem"><span class="good">一致 ${r.matched.length}</span>  <span style="color:#f08a24">＋ 自分だけ ${r.onlyUser.length}</span>  <span class="muted">− ヒントだけ ${r.onlyHint.length}</span></p>
+        <p class="muted ip-serif">ヒント:${esc(renderText(words, hints))}</p></div>`;
     }
-    html += `<p class="muted" style="font-size:.85rem"><span class="bk-c">［ ］節</span>:主語と動詞のあるまとまり(when / because / that / which … で始まる)<br>
-      <span class="bk-p">( )句</span>:主語と動詞のないまとまり(前置詞 + 名詞、to + 動詞、名詞のうしろの -ing / -ed)</p>`;
     if (state.detail != null && state.detail < words.length) html += detailHTML(a, state.detail, spans);
     box.innerHTML = html;
     bindDrag(sentence, spans);
@@ -500,10 +497,10 @@
     const around = userSpans.filter(s => s.start <= i && i <= s.end).map(s => [s, '自分の記号'])
       .concat(a.spans.filter(s => s.start <= i && i <= s.end).map(s => [s, 'ヒント'])).sort((x, y) => len(x[0]) - len(y[0]));
     return `<div class="card ip-detail" id="ip-detail">
-      <div class="row" style="justify-content:space-between"><b class="ip-word">${esc(word)}</b><button class="ghost" data-ip="close-detail">✕ 閉じる</button></div>
-      <div class="row"><button class="secondary" data-ip="say" data-w="${esc(word)}" data-rate="0.9">🔊 発音</button><button class="secondary" data-ip="say" data-w="${esc(word)}" data-rate="0.5">🐢 ゆっくり</button></div>
+      <div class="row" style="justify-content:space-between"><b class="ip-word">${esc(word)}</b><button class="ghost" data-ip="close-detail">閉じる</button></div>
+      <div class="row"><button class="secondary" data-ip="say" data-w="${esc(word)}" data-rate="0.9">${Icon('speaker')} 発音</button><button class="secondary" data-ip="say" data-w="${esc(word)}" data-rate="0.5">ゆっくり</button></div>
       <table><tr><th>品詞</th><td>${esc(partOfSpeech(a.words, a.tags, i))}</td></tr><tr><th>原形</th><td>${esc(lemma(a.words[i]))}</td></tr>
-        <tr><th>役割</th><td>${role ? `<b class="role role-${role}">${role}</b> ${esc(ROLE_MEANING[role])}` : '<span class="muted">要素の中心ではありません(冠詞や、まとまりの中の語など)</span>'}</td></tr>
+        <tr><th>役割</th><td>${role ? `<b class="role role-${role}">${role}</b> ${esc(ROLE_MEANING[role])}` : '<span class="muted">なし</span>'}</td></tr>
         ${a.arrows.filter(([f]) => f === i).map(([, t]) => `<tr><th>修飾</th><td style="color:#9b51e0">「${esc(bare(a.words[t]))}」をくわしくしている</td></tr>`).join('')}
         ${a.arrows.filter(([, t]) => t === i).map(([f]) => `<tr><th>修飾</th><td style="color:#9b51e0">「${esc(bare(a.words[f]))}」にくわしくされている</td></tr>`).join('')}
         ${around.map(([s, who]) => `<tr><th>${s.kind === 'clause' ? '節' : '句'}</th><td class="ip-serif">${esc(openOf(s) + a.words.slice(s.start, s.end + 1).join(' ') + closeOf(s))} <small class="muted">${who}</small></td></tr>`).join('')}
