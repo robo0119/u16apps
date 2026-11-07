@@ -7,6 +7,22 @@
   const HASH = '29881aad8730c5ab11d275376323d8e4ff4179aae8ccb6c13fe4902137e162ef';
   const KEY = 'sotaapp.unlocked';
 
+  // ---- Recito だけ公開する期間 ----
+  // この時刻(日本時間)から、トップページと他のアプリのページは Recito に移動する。
+  // もとに戻すときは null にする
+  const RECITO_ONLY_FROM = '2026-11-08T00:00:00+09:00';
+  // このファイルの場所(…/common/gate.js)から、サイトのいちばん上の場所を求める
+  const script = document.currentScript;
+  const siteRoot = script ? new URL('../', script.src) : new URL('/', location.href);
+  const recitoOnly = RECITO_ONLY_FROM !== null && Date.now() >= Date.parse(RECITO_ONLY_FROM);
+  window.SITE = { recitoOnly };
+  if (recitoOnly && !location.pathname.startsWith(new URL('ondoku/', siteRoot).pathname)) {
+    // 共有レポートのリンク(#d=)も、Recito 以外は開かない
+    location.replace(new URL('ondoku/', siteRoot).href);
+    return;
+  }
+  if (recitoOnly) document.documentElement.classList.add('recito-only');
+
   // この端末で一度入っていれば、何もしない
   try { if (localStorage.getItem(KEY) === HASH) return; } catch (e) { /* 保存できないブラウザ */ }
 

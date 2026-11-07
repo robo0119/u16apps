@@ -552,7 +552,7 @@
       case 'tool': state.tool = el.dataset.k; break;
       case 'view': view[el.dataset.k] = !view[el.dataset.k]; try { localStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch (e) { /* なし */ } break;
       case 'close-detail': state.detail = null; break;
-      case 'say': { const u = new SpeechSynthesisUtterance(el.dataset.w); u.lang = 'en-US'; u.rate = Number(el.dataset.rate) || 0.85; speechSynthesis.cancel(); speechSynthesis.speak(u); return; }
+      case 'say': { if (!window.speechSynthesis) return; const u = new SpeechSynthesisUtterance(el.dataset.w); u.lang = 'en-US'; u.rate = Number(el.dataset.rate) || 0.85; speechSynthesis.cancel(); speechSynthesis.speak(u); return; }
       case 'hint': state.showHint = !state.showHint; break;
       case 'clear': saveSentence(sentence, []); break;
       // 自分の記号がなければ、ヒントの記号で区切って読む

@@ -2,7 +2,14 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15161a" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Recito">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
   <title>Recito | 英語の音読・シャドーイング練習</title>
   <meta name="description" content="Recito(レシト)は、英語の教科書や英検の英文を声に出して読む練習アプリです。音声認識で読めた単語と言えなかった単語を色分けし、正確さと速さを採点します。中学生・高校生の英語学習用。">
   <meta name="keywords" content="英語,音読,シャドーイング,発音,英検,学習,教育,中学生,高校生">
@@ -10,30 +17,49 @@
   <meta property="og:description" content="英文を声に出して読むと、その場で採点。読めた単語は緑、言えなかった単語は赤。">
   <link rel="icon" href="../icons/ondokuchecker.png">
   <link rel="apple-touch-icon" href="../icons/ondokuchecker.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261105b">
-  <script src="../common/gate.js?v=20261105b"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261107a">
+  <script src="../common/gate.js?v=20261107a"></script>
+  <script src="../common/guard.js?v=20261107a"></script>
   <style>
     /* --accent は文字の色、--brand は塗りの色(ボタン・上のバー)。暗い画面では文字だけ明るくする */
     :root { --accent: #142a5c; --brand: #142a5c; --serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif; }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --accent: #9db4ee; --brand: #2c4c9a; } }
-    .topbar { background: var(--brand); }
     button { background: var(--brand); }
     button.secondary { background: var(--accent-soft); color: var(--accent); }
     main { max-width: 760px; }
-    /* タブ */
-    .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; padding: 6px; margin: 0 auto; max-width: 760px;
-      background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-    .tabs button { flex: 1; background: transparent; color: var(--muted); min-height: 44px; padding: 4px; font-weight: 700; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 0; line-height: 1.2; }
-    .tabs button span { font-size: 1.15rem; }
-    .tabs button small { font-size: .72rem; }
-    .tabs button.on { background: var(--card); color: var(--accent); box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+    /* ---- アプリのような上のバー(すりガラス) ---- */
+    .topbar { position: sticky; top: 0; z-index: 15; gap: 10px; height: calc(56px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+      background: color-mix(in srgb, var(--bg) 78%, transparent); color: var(--text); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+    .topbar img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 2px 8px rgba(20,42,92,.25); }
+    .topbar h1 { font-size: 1.3rem; font-weight: 800; letter-spacing: -.01em; }
+    .topbar a { color: var(--accent); font-weight: 700; }
+    .recito-only .topbar a.home { display: none; }
+    /* ---- タブ:広い画面は上に、スマホは下にアプリのタブバー ---- */
+    .tabs { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 14; display: flex; gap: 4px; padding: 8px 16px 6px; margin: 0 auto; max-width: 760px;
+      background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); }
+    .tabs button { flex: 1; background: transparent; color: var(--muted); min-height: 48px; padding: 4px; font-weight: 700; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1.2; transition: color .2s, background-color .2s; }
+    .tabs svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+    .tabs button small { font-size: .7rem; }
+    .tabs button.on { background: var(--card); color: var(--accent); box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+    .tabs button.on svg { transform: scale(1.08); stroke-width: 2.2; }
+    section[id^="tab-"]:not(.hidden) { animation: tab-in .22s ease-out; }
+    @keyframes tab-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    /* ---- ログイン ---- */
+    .auth-box { max-width: 420px; }
+    .auth-seg { margin-bottom: 0 !important; }
+    .auth-form { display: flex; flex-direction: column; gap: 8px; }
+    .account { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--bg); margin-bottom: 12px; }
+    .account .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: #fff; font-weight: 800; flex: none; }
+    button.small { min-height: 34px; padding: 4px 12px; }
     /* はじめに */
     .intro { display: flex; gap: 16px; align-items: center; background: linear-gradient(135deg, #142a5c, #2f4f9c); color: #fff; }
     .intro h2 { color: #fff; font-size: 1.3rem; margin: 0 0 4px; }
     .intro p { margin: 0; opacity: .9; font-size: .92rem; }
     .intro .legend { display: flex; gap: 10px; margin-top: 8px; font-family: var(--serif); font-size: 1.05rem; }
     .intro .legend b { background: rgba(255,255,255,.95); padding: 0 8px; border-radius: 6px; }
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 16px; padding: 0; }
     .step { background: var(--card); border-radius: 14px; padding: 10px 12px; font-size: .82rem; color: var(--muted); }
     .step b { display: block; color: var(--text); font-size: .95rem; }
     .support { background: color-mix(in srgb, var(--warn) 12%, var(--card)); }
@@ -195,15 +221,22 @@
     .ch-stats small { color: var(--muted); }
     .ch-after { justify-content: center; margin-top: 18px; gap: 10px; }
     .ch-after button { min-height: 52px; font-size: 1.1rem; padding: 6px 20px; }
-    .ch-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+    .ch-confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
     .ch-filter { width: 100%; margin-bottom: 12px; min-height: 44px; }
     .ch-rank { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
     .ch-place { font-size: 1.6rem; width: 44px; text-align: center; font-weight: 900; }
     .ch-rpoints { font-size: 1.5rem; color: var(--accent); font-variant-numeric: tabular-nums; }
     @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     @media (max-width: 560px) {
-      .tabs button small { font-size: .58rem; white-space: nowrap; }
-      .tabs button { padding: 4px 0; }
+      /* スマホ:タブは画面の下に固定(iPhoneのアプリと同じ位置) */
+      .tabs { position: fixed; top: auto; left: 0; right: 0; bottom: 0; max-width: none; gap: 0; padding: 6px max(4px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom));
+        background: color-mix(in srgb, var(--card) 80%, transparent); border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
+      .tabs button, .tabs button.on { background: transparent; box-shadow: none; padding: 2px 0; min-height: 50px; border-radius: 10px; }
+      .tabs button small { font-size: .62rem; white-space: nowrap; }
+      body { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+      footer { display: none; }
+      .ch-sticky { bottom: calc(68px + env(safe-area-inset-bottom)); }
+      main { padding: 12px max(12px, env(safe-area-inset-left)); }
       .ch-text { font-size: 1.8rem; }
       .ch-points { font-size: 3.6rem; }
       .steps { grid-template-columns: 1fr; }
@@ -218,18 +251,18 @@
   <header class="topbar">
     <picture><source srcset="../icons/ondokuchecker-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/ondokuchecker.png" alt=""></picture>
     <h1>Recito</h1>
-    <a href="../">Sotaのapp</a>
+    <a class="home" href="../">Sotaのapp</a>
   </header>
   <section id="report" class="hidden"><main></main></section>
 
   <div id="app">
     <nav class="tabs no-print">
-      <button data-tab="practice"><span>🎤</span><small>練習</small></button>
-      <button data-tab="library"><span>📚</span><small>ライブラリ</small></button>
-      <button data-tab="history"><span>📈</span><small>記録</small></button>
-      <button data-tab="weak"><span>🔍</span><small>苦手</small></button>
-      <button data-tab="interpret"><span>📝</span><small>解釈</small></button>
-      <button data-tab="challenge"><span>🏁</span><small>チャレンジ</small></button>
+      <button data-tab="practice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></svg><small>練習</small></button>
+      <button data-tab="library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg><small>ライブラリ</small></button>
+      <button data-tab="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><small>記録</small></button>
+      <button data-tab="weak"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><small>苦手</small></button>
+      <button data-tab="interpret"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H5v16h3M16 4h3v16h-3"/><path d="M9 9h6M9 13h6M9 17h3"/></svg><small>解釈</small></button>
+      <button data-tab="challenge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg><small>チャレンジ</small></button>
     </nav>
     <main>
       <section id="tab-practice">
@@ -295,15 +328,15 @@
   </div>
   <footer>Recito — 英語の音読練習</footer>
 
-  <script src="../common/qr.js?v=20261105b"></script>
-  <script src="../common/bridge.js?v=20261105b"></script>
-  <script src="../common/charts.js?v=20261105b"></script>
-  <script src="../common/firebase-config.js?v=20261105b"></script>
-  <script src="../common/sync.js?v=20261105b"></script>
-  <script src="library.js?v=20261105b"></script>
-  <script src="app.js?v=20261105b"></script>
-  <script src="shadow.js?v=20261105b"></script>
-  <script src="interpret.js?v=20261105c"></script>
-  <script src="challenge.js?v=20261105b"></script>
+  <script src="../common/qr.js?v=20261107a"></script>
+  <script src="../common/bridge.js?v=20261107a"></script>
+  <script src="../common/charts.js?v=20261107a"></script>
+  <script src="../common/firebase-config.js?v=20261107a"></script>
+  <script src="../common/sync.js?v=20261107a"></script>
+  <script src="library.js?v=20261107a"></script>
+  <script src="app.js?v=20261107a"></script>
+  <script src="shadow.js?v=20261107a"></script>
+  <script src="interpret.js?v=20261107a"></script>
+  <script src="challenge.js?v=20261107a"></script>
 </body>
 </html>

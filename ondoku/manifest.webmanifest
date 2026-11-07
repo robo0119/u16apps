@@ -1,0 +1,13 @@
+{
+  "name": "Recito 英語の音読練習",
+  "short_name": "Recito",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f1",
+  "theme_color": "#142a5c",
+  "lang": "ja",
+  "icons": [
+    { "src": "../icons/ondokuchecker.png", "sizes": "256x256", "type": "image/png", "purpose": "any" }
+  ]
+}

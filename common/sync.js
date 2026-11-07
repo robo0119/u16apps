@@ -58,6 +58,12 @@
     if (/^WEAK_PASSWORD/.test(code)) return 'パスワードは6文字以上にしてください';
     if (/^INVALID_EMAIL/.test(code)) return 'メールアドレスの形が正しくありません';
     if (/^TOO_MANY_ATTEMPTS/.test(code)) return 'しばらく待ってからやり直してください';
+    if (/^MISSING_PASSWORD/.test(code)) return 'パスワードを入れてください';
+    if (/^MISSING_EMAIL/.test(code)) return 'メールアドレスを入れてください';
+    if (/^USER_DISABLED/.test(code)) return 'このアカウントは使えなくなっています';
+    if (/^OPERATION_NOT_ALLOWED/.test(code)) return 'いまは新しい登録ができません';
+    if (/^(INVALID_REFRESH_TOKEN|TOKEN_EXPIRED|USER_NOT_FOUND)/.test(code)) return 'ログインの期限が切れました。もう一度ログインしてください';
+    if (code === 'OFFLINE') return 'インターネットにつながっていません';
     if (code === 'PERMISSION_DENIED' || /insufficient permissions/.test(code)) return 'このデータを読み書きする権限がありません(ルールを確かめてください)';
     return `通信できませんでした(${code})`;
   }
@@ -66,7 +72,10 @@
   async function send(url, body, token) {
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    let res;
+    // 通信そのものができない(電波がない など)ときは、わかる言葉にする
+    try { res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) }); }
+    catch (e) { throw new Error(message('OFFLINE')); }
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       const e = (json && json.error) || (Array.isArray(json) && json[0] && json[0].error) || {};
@@ -87,6 +96,11 @@
     signUp(email, password) { return this._sign('accounts:signUp', email, password); },
     /** ログイン */
     signIn(email, password) { return this._sign('accounts:signInWithPassword', email, password); },
+    /** パスワードを忘れたとき:登録したメールアドレスに、パスワードを決め直すメールを送る */
+    async resetPassword(email) {
+      if (!configured()) throw new Error('Firebaseの設定がまだです');
+      await send(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${cfg().apiKey}`, { requestType: 'PASSWORD_RESET', email });
+    },
     /** ログアウト(このブラウザのログイン情報と同期の記録を消す。データは残す) */
     signOut() { this.user = null; idToken = null; STATE_KEYS.forEach(k => localStorage.removeItem(k)); },
 
@@ -103,11 +117,14 @@
       const u = this.user;
       if (!u) throw new Error('ログインしてください');
       if (idToken && Date.now() < expiresAt) return { uid: u.uid, token: idToken };
-      const res = await fetch(`https://securetoken.googleapis.com/v1/token?key=${cfg().apiKey}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(u.refreshToken)}`,
-      });
-      const j = await res.json();
+      let res;
+      try {
+        res = await fetch(`https://securetoken.googleapis.com/v1/token?key=${cfg().apiKey}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(u.refreshToken)}`,
+        });
+      } catch (e) { throw new Error(message('OFFLINE')); }
+      const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(message((j.error && j.error.message) || 'TOKEN'));
       idToken = j.id_token;
       expiresAt = Date.now() + (Number(j.expires_in || 3600) - 120) * 1000;

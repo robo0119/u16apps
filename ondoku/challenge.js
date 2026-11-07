@@ -152,7 +152,7 @@
   function startListening() {
     const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Rec) { $('ch-err').textContent = 'このブラウザは声の入力に対応していません(Chrome・Edge・Safari で開いてください)'; return; }
-    speechSynthesis.cancel();
+    if (window.speechSynthesis) speechSynthesis.cancel();
     joiner = W.makeJoiner(); started = Date.now(); first = 0; lastAt = 0; finished = false;
     state.listening = true;
     render();
@@ -172,7 +172,12 @@
       rec.onend = () => { if (state.listening && !finished && Date.now() - started < 60000) { joiner.commit(); try { begin(); } catch (err) { finish(); } } };
       rec.start();
     };
-    begin();
+    // 最初の聞き取りが始められないとき(マイクが他で使われている など)は、知らせて元にもどす
+    try { begin(); } catch (err) {
+      state.listening = false;
+      const e = $('ch-err'); if (e) e.textContent = 'マイクを使い始められませんでした。もう一度タップしてください';
+      rec = null; return;
+    }
     tick();
   }
 
@@ -212,6 +217,8 @@
       const to = Number(el.dataset.to), t0 = performance.now() + k * 250;
       const step = (now) => { const p = Math.min(1, Math.max(0, (now - t0) / 800)); el.textContent = Math.round(to * p); if (p < 1) requestAnimationFrame(step); };
       requestAnimationFrame(step);
+      // 画面が裏にあると動きが止まるので、少したったら必ず最後の点数にする
+      setTimeout(() => { el.textContent = to; }, 1200 + k * 250);
     });
     const canvas = $('ch-confetti');
     if (!canvas) return;

@@ -142,3 +142,19 @@ footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 24p
 @media (max-width: 480px) {
   .bar-row { grid-template-columns: 4.5em 1fr 5.5em; }
 }
+
+/* ---- さわったときの手ごたえ(アプリのように、押すと少し沈む) ---- */
+button, .button { transition: transform .12s ease, opacity .2s, background-color .2s, color .2s, box-shadow .2s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+button:active:not(:disabled), .button:active { transform: scale(.97); }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .card { box-shadow: none; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ---- 画面の下のお知らせ(common/guard.js) ---- */
+#toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); z-index: 9000;
+  max-width: min(92vw, 460px); padding: 10px 16px; border-radius: 14px; font-size: .9rem; font-weight: 700; text-align: center;
+  background: color-mix(in srgb, var(--text) 88%, transparent); color: var(--bg); box-shadow: 0 8px 28px rgba(0,0,0,.2);
+  opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+#toast.error { background: var(--bad); color: #fff; }

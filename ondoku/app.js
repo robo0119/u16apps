@@ -424,7 +424,7 @@
       if (rec) { stopListening(); return; }
       if (!passage()) { state.editing = true; renderPassage(); return; }
       state.editing = false;
-      speechSynthesis.cancel();
+      if (window.speechSynthesis) speechSynthesis.cancel();
       text = ''; joiner = makeJoiner(); started = Date.now(); first = 0; lastAt = 0; restarts = 0;
       total = tokenize(passage()).length;
       $('mic-note').textContent = '';
@@ -433,7 +433,11 @@
       renderPassage(new Array(total).fill('todo'));
       state.listening = true;
       updateMic();
-      begin();
+      // 聞き取りを始められないとき(マイクが他で使われている など)は、知らせて元にもどす
+      try { begin(); } catch (err) {
+        rec = null; state.listening = false; updateMic();
+        $('mic-note').innerHTML = '<span class="bad">マイクを使い始められませんでした。もう一度タップしてください</span>';
+      }
     };
   }
 
@@ -592,7 +596,7 @@
     const say = ev.target.closest('[data-say]');
     if (say) { speak(say.dataset.say, Number(say.dataset.rate) || 0.85); return; }
     const act = ev.target.closest('[data-ow]');
-    if (act) { ev.preventDefault(); ACTIONS[act.dataset.ow](act); return; }
+    if (act) { ev.preventDefault(); if (ACTIONS[act.dataset.ow]) ACTIONS[act.dataset.ow](act); return; }
     const tab = ev.target.closest('[data-tab]');
     if (tab) { showTab(tab.dataset.tab); return; }
     const mode = ev.target.closest('[data-mode]');
@@ -629,7 +633,9 @@
     setMode('read');
     let tab = 'practice';
     try { tab = localStorage.getItem('ondoku.tab') || 'practice'; } catch (e) { /* なし */ }
-    showTab(TABS.includes(tab) ? tab : 'practice');
+    // 英文解釈・チャレンジのプログラムは、このファイルより後に読みこまれるので、全部そろってから前回のタブを開く
+    const open = () => showTab(TABS.includes(tab) ? tab : 'practice');
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', open); else open();
   }
 
   // シャドーイング・ライブラリ・テストから使えるように

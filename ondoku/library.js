@@ -28,6 +28,23 @@
     newID() { return (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).toUpperCase(); },
   };
 
+  // ---- このブラウザのライブラリが、だれのものか ----
+  // 別の人がログインしたとき、前の人の文章がその人のアカウントに送られないようにする
+  const OWNER_KEY = 'ondoku.owner';
+  /** ログインした人(uid)のライブラリにする:前に別の人のものだったら、このブラウザの文章を空にしてから同期する */
+  function claim(uid) {
+    let owner = null;
+    try { owner = localStorage.getItem(OWNER_KEY); } catch (e) { /* なし */ }
+    if (owner && owner !== uid) {
+      Store.data.passages = {};
+      try { localStorage.removeItem(Store.SYNC_KEY); } catch (e) { /* なし */ }
+      Store.save();
+    }
+    try { localStorage.setItem(OWNER_KEY, uid); } catch (e) { /* なし */ }
+  }
+  /** メールアドレスの形か(@ の前後に文字があり、後ろに . がある) */
+  const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+
   // ---- 段落の分け方(iOS版の PassageSplitter と同じ)----
 
   const wordCount = (t) => t.split(/[\s—–-]+/).filter(w => /[A-Za-z0-9]/.test(w)).length;
@@ -50,7 +67,7 @@
 
   // ---- 画面 ----
 
-  const state = { editing: null, open: null, message: '' };
+  const state = { editing: null, open: null, message: '', info: '', auth: 'login', busy: false };
 
   /** ライブラリの部分を描く */
   function render() {
@@ -59,15 +76,23 @@
     let html = '<h2>ライブラリ</h2>';
     if (!Sync.configured()) html += '<p class="muted">同期の設定がありません</p>';
     else if (!user) {
-      html += `<p class="muted">StudyPilot・iPhoneのRecitoと同じアカウントでログインすると、ここに入れた文章がiPhoneに届きます。</p>
-        <div class="row"><input id="lib-email" type="email" placeholder="メールアドレス" autocomplete="username" style="flex:1;min-width:180px">
-        <input id="lib-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="flex:1;min-width:140px">
-        <button data-lib="login">ログイン</button></div>`;
+      const signup = state.auth === 'signup';
+      html += `<div class="auth-box">
+        <div class="seg auth-seg"><button class="${signup ? '' : 'on'}" data-lib="mode" data-m="login">ログイン</button><button class="${signup ? 'on' : ''}" data-lib="mode" data-m="signup">新しく登録</button></div>
+        <p class="muted" style="margin:6px 0 10px">${signup ? 'メールアドレスとパスワード(6文字以上)で登録します。文章はあなたのアカウントだけに保存され、ほかの人からは見えません。' : 'ログインすると、ここに入れた文章がiPhoneのRecitoと同期します。ログインしなくても練習はできます。'}</p>
+        <form class="auth-form" data-form="auth">
+          <input id="lib-email" type="email" placeholder="メールアドレス" autocomplete="username" inputmode="email" autocapitalize="off" required>
+          <input id="lib-pass" type="password" placeholder="パスワード${signup ? '(6文字以上)' : ''}" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="${signup ? 6 : 1}" required>
+          <button type="submit" ${state.busy ? 'disabled' : ''}>${state.busy ? '…' : signup ? '登録してはじめる' : 'ログイン'}</button>
+        </form>
+        ${signup ? '' : '<button class="ghost" data-lib="reset" style="margin-top:4px">パスワードを忘れた</button>'}</div>`;
     } else {
-      html += `<p class="muted">ログイン中:${esc(user.email)} ${Sync.isSyncing ? '・同期中…' : Sync.lastError ? `・<span class="bad">${esc(Sync.lastError)}</span>` : Sync.lastSync ? '・同期済み ✓' : ''}
-        <button class="secondary" data-lib="sync" style="min-height:32px;padding:4px 12px">同期</button></p>`;
+      html += `<div class="account"><span class="avatar">${esc((user.email || '?')[0].toUpperCase())}</span>
+        <div class="grow"><b>${esc(user.email)}</b><div class="muted">${Sync.isSyncing ? '同期中…' : Sync.lastError ? `<span class="bad">${esc(Sync.lastError)}</span>` : Sync.lastSync ? '同期済み ✓' : 'ログイン中'}</div></div>
+        <button class="secondary small" data-lib="sync">同期</button><button class="ghost small" data-lib="logout">ログアウト</button></div>`;
     }
     if (state.message) html += `<p class="bad">${esc(state.message)}</p>`;
+    if (state.info) html += `<p class="good">${esc(state.info)}</p>`;
     if (state.editing) {
       const e = state.editing;
       html += `<div class="card" style="box-shadow:none;border:1px solid var(--line)">
@@ -124,13 +149,44 @@
   }
 
   const ACTIONS = {
+    /** ログインか登録をする(入力を確かめてから送る) */
     async login() {
-      state.message = '';
-      try { await Auth.signIn($('lib-email').value.trim(), $('lib-pass').value); await Sync.run(Store); }
+      if (state.busy) return;
+      const email = $('lib-email').value.trim(), pass = $('lib-pass').value;
+      state.message = ''; state.info = '';
+      if (!isEmail(email)) { state.message = 'メールアドレスの形が正しくありません'; render(); return; }
+      if (state.auth === 'signup' && pass.length < 6) { state.message = 'パスワードは6文字以上にしてください'; render(); return; }
+      if (!pass) { state.message = 'パスワードを入れてください'; render(); return; }
+      state.busy = true; render();
+      try {
+        if (state.auth === 'signup') await Auth.signUp(email, pass); else await Auth.signIn(email, pass);
+        claim(Auth.user.uid);
+        await Sync.run(Store);
+      } catch (e) { state.message = e.message; }
+      state.busy = false;
+      render();
+    },
+    mode(el) { state.auth = el.dataset.m; state.message = ''; state.info = ''; render(); },
+    /** パスワードを決め直すメールを送る */
+    async reset() {
+      const email = ($('lib-email') && $('lib-email').value.trim()) || '';
+      state.message = ''; state.info = '';
+      if (!isEmail(email)) { state.message = '上にメールアドレスを入れてから押してください'; render(); return; }
+      try { await Auth.resetPassword(email); state.info = 'パスワードを決め直すメールを送りました(届かなければ迷惑メールも見てください)'; }
       catch (e) { state.message = e.message; }
       render();
     },
-    async sync() { render(); await Sync.run(Store); render(); },
+    /** ログアウト:このブラウザから文章を消す(アカウントには残る) */
+    logout() {
+      if (!confirm('ログアウトしますか?(このブラウザの文章は消えます。アカウントには残っています)')) return;
+      Auth.signOut();
+      Store.data.passages = {};
+      Store.save();
+      try { localStorage.removeItem(OWNER_KEY); } catch (e) { /* なし */ }
+      state.message = ''; state.info = 'ログアウトしました';
+      render();
+    },
+    async sync() { if (Auth.user) claim(Auth.user.uid); render(); await Sync.run(Store); render(); },
     new() { state.editing = { id: null, title: '', category: '英検', text: '' }; render(); },
     edit(el) { state.editing = { ...Store.get('passages', el.dataset.id) }; render(); },
     cancel() { state.editing = null; render(); },
@@ -154,11 +210,18 @@
     shadowpara(el) { usePassage(paragraphs(Store.get('passages', el.dataset.id).text)[Number(el.dataset.i)], 'shadow'); },
   };
 
+  // ログイン・登録のフォーム(Enter キーでも送れる)
+  document.addEventListener('submit', (ev) => {
+    if (!ev.target.closest('[data-form="auth"]')) return;
+    ev.preventDefault();
+    ACTIONS.login();
+  });
+
   document.addEventListener('click', (ev) => {
     const el = ev.target.closest('[data-lib]');
     if (!el) return;
     ev.preventDefault();
-    ACTIONS[el.dataset.lib](el);
+    if (ACTIONS[el.dataset.lib]) ACTIONS[el.dataset.lib](el);
   });
 
   window.RecitoLibrary = { paragraphs, record };
