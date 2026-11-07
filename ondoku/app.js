@@ -14,6 +14,7 @@
   // 見本の英文(はじめての人がすぐ試せるように。やさしい順)
   const SAMPLES = [
     { label: 'はじめて', text: 'Reading aloud is a great way to learn English. When you read a text out loud, you practice listening, speaking, and reading at the same time. Try to read clearly and keep a steady pace.' },
+    { label: '英検準2級くらい', text: 'Last summer, I visited a small town by the sea with my family. Every morning, we walked along the beach and watched the fishing boats come back. The people there were very kind, and an old man showed me how to catch fish. I hope I can go back there again someday.' },
     { label: '英検2級くらい', text: 'Many students use their smartphones to study after school. Some apps can check your pronunciation and show which words you missed. However, it is still important to practice every day, because a new habit takes time to build. Even ten minutes a day can make a big difference.' },
     { label: '英検準1級くらい', text: 'Researchers have found that people remember information better when they say it out loud. This is sometimes called the production effect. Because speaking requires us to plan, pronounce, and hear each word, the brain treats the material as more distinctive. As a result, reading aloud can be a surprisingly effective strategy for learners preparing for exams.' },
   ];
