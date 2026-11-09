@@ -8,8 +8,8 @@
   <meta name="keywords" content="学習,勉強,教育,中学生,高校生">
   <link rel="icon" href="../icons/studyplanner.png">
   <link rel="apple-touch-icon" href="../icons/studyplanner.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261106c">
-  <script src="../common/gate.js?v=20261107a"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261109a">
+  <script src="../common/gate.js?v=20261109a"></script>
   <style>
     :root { --accent: #5b4ee0; --ok: #2f9e57; --tri: #f08a24; --ng: #e2474f; --ticket: #a35ee6; }
     .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
@@ -207,6 +207,14 @@
     .rm-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rm-track { position: relative; height: 22px; background: color-mix(in srgb, var(--line) 50%, transparent); border-radius: 11px; }
     .rm-bar { position: absolute; top: 0; height: 22px; border-radius: 6px; overflow: hidden; }
+    /* ノルマに合わせて動かした周:元の位置は点線のわく */
+    .rm-ghost { position: absolute; top: 0; height: 22px; border-radius: 6px; border: 1.5px dashed; opacity: .65; box-sizing: border-box; }
+    .rm-ghost-key { display: inline-block; width: 18px; height: 10px; border-radius: 3px; border: 1.5px dashed var(--accent); background: transparent !important; vertical-align: middle; }
+    .rm-moved { background: color-mix(in srgb, #f08a24 8%, var(--card)); }
+    .rm-moved-h { color: #f08a24; display: block; margin-bottom: 6px; }
+    .rm-moved-row { padding: 8px 0; border-top: 1px solid var(--line); }
+    .rm-moved-row:first-of-type { border-top: none; }
+    .lapb-shift { background: color-mix(in srgb, #f08a24 15%, transparent); color: #f08a24; white-space: nowrap; }
     .rm-bar i { position: absolute; left: 0; top: 0; bottom: 0; }
     .rm-bar b { position: relative; color: #fff; font-size: .68rem; font-weight: 800; padding-left: 6px; line-height: 22px; white-space: nowrap; text-shadow: 0 0 2px rgba(0,0,0,.3); }
     .rm-line { position: absolute; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, #f08a24 55%, transparent); z-index: 1; }
@@ -244,13 +252,13 @@
   <main id="view"></main>
   <footer>データはこのブラウザと、ログインしていれば Firebase(本人だけが読み書きできる場所)に保存されます。</footer>
 
-  <script src="../common/bridge.js?v=20261106c"></script>
-  <script src="../common/charts.js?v=20261106c"></script>
-  <script src="../common/firebase-config.js?v=20261106c"></script>
-  <script src="engine.js?v=20261106c"></script>
-  <script src="store.js?v=20261106c"></script>
-  <script src="../common/sync.js?v=20261106c"></script>
-  <script src="logic.js?v=20261106c"></script>
-  <script src="app.js?v=20261106c"></script>
+  <script src="../common/bridge.js?v=20261109a"></script>
+  <script src="../common/charts.js?v=20261109a"></script>
+  <script src="../common/firebase-config.js?v=20261109a"></script>
+  <script src="engine.js?v=20261109a"></script>
+  <script src="store.js?v=20261109a"></script>
+  <script src="../common/sync.js?v=20261109a"></script>
+  <script src="logic.js?v=20261109a"></script>
+  <script src="app.js?v=20261109a"></script>
 </body>
 </html>

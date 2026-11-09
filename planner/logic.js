@@ -189,13 +189,31 @@
       return r;
     },
 
-    /** その日のノルマ(Scheduler と同じ決まり。まだ保存しない) */
+    /** 教材ごとの、1日ごとのノルマの記録({ 教材のID: [{ date, quota, done }] }) */
+    quotaDays() {
+      const r = {};
+      S.all('dayLogs').forEach(log => log.entries.forEach(e => { if (e.quota > 0) (r[e.material] = r[e.material] || []).push({ date: log.date, quota: e.quota, done: e.done }); }));
+      return r;
+    },
+
+    /** ノルマに合わせて直した周回(教材1冊。E.lapShift の結果) */
+    adjustedLaps(m, records) {
+      return E.lapShift(m.laps || [], (records || L.quotaDays())[m.id] || [], m.every ?? 0, E.keyOf(new Date()));
+    },
+
+    /** 直した周回の予定だけ(なければ元の予定) */
+    shiftedLaps(m, records) {
+      return (m.laps || []).length ? L.adjustedLaps(m, records).map(a => a.lap) : [];
+    },
+
+    /** その日のノルマ(Scheduler と同じ決まり。まだ保存しない)。周回は、ノルマに合わせて直した期間を使う */
     schedule(key) {
       const last = L.lastDoneDates();
+      const records = L.quotaDays();
       const items = L.materials().map(m => ({ id: m.id, subject: m.subject, name: m.name, role: m.role || 'メイン',
         everyDays: m.every ?? 0, group: m.group || '', amount: m.amount || 0, unit: m.unit || 'ページ',
         activeFrom: m.activeFrom || null, activeUntil: m.activeUntil || null, order: (m.routeOrder || 0) * 1000 + (m.order || 0),
-        lastDone: last[m.id] || null, laps: m.laps || [],
+        lastDone: last[m.id] || null, laps: L.shiftedLaps(m, records),
         pipeline: m.groupMode === '単元順' && !!m.group, units: (m.route || []).map(r => r.title), unitsDone: m.done || 0,
         weekendOnly: !!m.weekendOnly }));
       const priority = {};

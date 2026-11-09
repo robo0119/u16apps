@@ -499,6 +499,59 @@
     return '全部の周を終えた';
   }
 
+  // ---- ノルマが足りなかった分だけ、周回をうしろへずらす(LapShift.swift と同じ)----
+
+  /** 1日の足りなかった分(0〜1):ノルマの8割以上なら0、それ未満は 1 − やった数 ÷ ノルマ */
+  function lapShortfall(r) {
+    if (!(r.quota > 0) || isAchieved(r.quota, r.done)) return 0;
+    return 1 - Math.min(1, Math.max(0, r.done) / r.quota);
+  }
+
+  /**
+   * 周回の予定を、ノルマの記録に合わせて直す(元の予定は変えない)
+   * records:[{ date, quota, done }]、interval:何日に1回か、today:今日(この日の分は数えない)
+   * 手順(1周目から順に。前の周のずれ carry を、うしろの周にそのまま足す):
+   * 1. 元の始める日・終わる日に carry を足す
+   * 2. 終えた周:終えた日が終わる日より遅ければ、その日まで伸ばす(carry にも足す)
+   * 3. まだの周:始める日〜昨日の、足りなかった分を合計 → ずらす日数 = 四捨五入(足りなかった回数 × 何日に1回か)
+   *    1回も進めていない → 延期(始める日もうしろへ)、少しでも進めた → 遅らせる(終わる日だけ)
+   * 返す形:[{ lap(直した予定), original, kind:'予定どおり'|'遅らせた'|'延期した'|'前の周に合わせた', missed, shiftDays }]
+   */
+  function lapShift(laps, records, interval, today) {
+    const step = Math.max(1, interval || 1);
+    let carry = 0;
+    return (laps || []).slice().sort((a, b) => a.lap - b.lap).map(original => {
+      const lap = { ...original, start: addDays(original.start, carry), end: addDays(original.end, carry) };
+      const pushedBy = carry;
+      if (original.done) {
+        const over = Math.max(0, daysBetween(lap.end, original.done));
+        lap.end = addDays(lap.end, over);
+        carry += over;
+        return { lap, original, kind: over > 0 ? '遅らせた' : pushedBy > 0 ? '前の周に合わせた' : '予定どおり', missed: 0, shiftDays: daysBetween(original.end, lap.end) };
+      }
+      const window = (records || []).filter(r => r.quota > 0 && r.date >= lap.start && r.date < today);
+      const missed = window.reduce((s, r) => s + lapShortfall(r), 0);
+      const shift = Math.round(missed * step + 1e-9);
+      let kind = pushedBy > 0 ? '前の周に合わせた' : '予定どおり';
+      if (shift > 0) {
+        if (window.every(r => !(r.done > 0))) { kind = '延期した'; lap.start = addDays(lap.start, shift); } else kind = '遅らせた';
+        lap.end = addDays(lap.end, shift);
+        carry += shift;
+      }
+      return { lap, original, kind, missed, shiftDays: daysBetween(original.end, lap.end) };
+    });
+  }
+
+  /** 1行の説明(例:「ノルマ 3回分が足りず、終わりを 11/20 → 11/23 に遅らせた」) */
+  function lapShiftReason(a) {
+    const md = (k) => `${Number(k.slice(5, 7))}/${Number(k.slice(8, 10))}`;
+    const n = Number.isInteger(a.missed) ? a.missed : a.missed.toFixed(1);
+    if (a.kind === '遅らせた') return a.original.done ? `終えた日に合わせて、終わりを ${md(a.original.end)} → ${md(a.lap.end)}` : `ノルマ ${n}回分が足りず、終わりを ${md(a.original.end)} → ${md(a.lap.end)} に遅らせた`;
+    if (a.kind === '延期した') return `まだ始めていないので、${md(a.original.start)}〜${md(a.original.end)} を ${md(a.lap.start)}〜${md(a.lap.end)} に延期した`;
+    if (a.kind === '前の周に合わせた') return `前の周が遅れたぶん、${md(a.lap.start)}〜${md(a.lap.end)} にずらした`;
+    return '予定どおり';
+  }
+
   /** その日に使える教材か(期間・役割・モード・周回) */
   function schedActive(item, day, events) {
     if (item.activeFrom && item.activeFrom > day) return false;
@@ -739,7 +792,7 @@
   const forBookAdvice = (records, isMock) => { const m = records.filter(isMock); return m.length ? { records: m, fromMock: true } : { records, fromMock: false }; };
 
   const Engine = {
-    dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel,
+    dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel, lapShortfall, lapShift, lapShiftReason,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
     trendOverall, trendSeries, forBookAdvice, bookDeviation, ownsBook, adviseBooks, bookRoadmap, weakWordsFromProfile, UNKNOWN_DEVIATION,
     ability, weakness, urgency, priority, allocate, isCore, trackWeight, estimateDeviation, effectiveDeviation, isMock, content, reason, plan, redistribute,

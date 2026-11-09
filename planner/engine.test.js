@@ -261,5 +261,32 @@ test('模試の全体は偏差値、平均は50', () => { const o = E.trendOvera
 test('同じ数学でも考査と模試は別', () => { eq(E.trendSeries(TT, '数学', 'exam').points.map(p => p.value), [80, 90]); eq(E.trendSeries(TT, '数学', 'mock').points.map(p => p.value), [64]); });
 test('参考書には模試を優先', () => { eq(E.forBookAdvice(TT, e => e.isMock).records.length, 2); eq(E.forBookAdvice(TT.filter(e => !e.isMock), e => e.isMock).fromMock, false); });
 
+
+// ---- ノルマが足りなかった分だけ、周回をずらす(LapShift と同じ)----
+{
+  const laps = [{ lap: 1, start: '2026-11-01', end: '2026-11-10', scope: '', done: null }, { lap: 2, start: '2026-11-11', end: '2026-11-20', scope: '', done: null }];
+  const r = (date, quota, done) => ({ date, quota, done });
+  test('周回のずれ:足りなかった分は 8割以上0・半分0.5・なし1', () => {
+    eq([E.lapShortfall(r('x', 5, 4)), E.lapShortfall(r('x', 4, 2)), E.lapShortfall(r('x', 1, 0)), E.lapShortfall(r('x', 0, 0))], [0, 0.5, 1, 0]);
+  });
+  test('周回のずれ:途中まで進めて2日できない → 終わりを2日遅らせ、2周目も2日うしろ', () => {
+    const a = E.lapShift(laps, [r('2026-11-01', 1, 1), r('2026-11-02', 1, 0), r('2026-11-03', 1, 0), r('2026-11-04', 1, 1)], 1, '2026-11-05');
+    eq([a[0].kind, a[0].lap.start, a[0].lap.end, a[0].shiftDays], ['遅らせた', '2026-11-01', '2026-11-12', 2]);
+    eq([a[1].kind, a[1].lap.start, a[1].lap.end], ['前の周に合わせた', '2026-11-13', '2026-11-22']);
+  });
+  test('周回のずれ:1回も進めていない → 周ごと延期', () => {
+    const a = E.lapShift(laps, [r('2026-11-01', 1, 0), r('2026-11-02', 1, 0), r('2026-11-03', 1, 0)], 1, '2026-11-04');
+    eq([a[0].kind, a[0].lap.start, a[0].lap.end], ['延期した', '2026-11-04', '2026-11-13']);
+  });
+  test('周回のずれ:今日の分は数えない・2日に1回は1回で2日', () => {
+    eq(E.lapShift(laps, [r('2026-11-02', 1, 0)], 1, '2026-11-02')[0].kind, '予定どおり');
+    eq(E.lapShift(laps, [r('2026-11-01', 1, 1), r('2026-11-03', 1, 0)], 2, '2026-11-05')[0].lap.end, '2026-11-12');
+  });
+  test('周回のずれ:遅く終えた周はその日まで伸び、次の周もずれる', () => {
+    const a = E.lapShift([{ ...laps[0], done: '2026-11-13' }, laps[1]], [], 1, '2026-11-14');
+    eq([a[0].kind, a[0].lap.end, a[1].lap.start], ['遅らせた', '2026-11-13', '2026-11-14']);
+  });
+}
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);

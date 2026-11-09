@@ -16,8 +16,12 @@
   const siteRoot = script ? new URL('../', script.src) : new URL('/', location.href);
   const recitoOnly = RECITO_ONLY_FROM !== null && Date.now() >= Date.parse(RECITO_ONLY_FROM);
   window.SITE = { recitoOnly };
-  if (recitoOnly && !location.pathname.startsWith(new URL('ondoku/', siteRoot).pathname)) {
-    // 共有レポートのリンク(#d=)も、Recito 以外は開かない
+  // Recito だけの期間でも、アドレスを直接開けば使えるページ(トップの一覧には出さない)
+  // planner/:自分の StudyPilot を Claude などのブラウザで開いて編集するため
+  const ALWAYS_OPEN = ['ondoku/', 'planner/'];
+  const allowed = ALWAYS_OPEN.some(p => location.pathname.startsWith(new URL(p, siteRoot).pathname));
+  if (recitoOnly && !allowed) {
+    // 共有レポートのリンク(#d=)も、ここにあるページ以外は開かない
     location.replace(new URL('ondoku/', siteRoot).href);
     return;
   }

@@ -235,8 +235,8 @@
   }
 
   /** 周回の状態の小さなラベル(遅れは赤、途中は青、まだは灰) */
-  function lapBadge(m) {
-    const st = E.lapStatus(m.laps, today());
+  function lapBadge(m, records) {
+    const st = E.lapStatus(L.shiftedLaps(m, records), today());
     if (!st) return '';
     return `<span class="lapb lapb-${st.state}">${esc(E.lapLabel(st))}</span>`;
   }
@@ -254,7 +254,12 @@
     const key = today();
     const months = state.rmRange ?? 6;
     const start = E.addDays(key, -7);
-    const allEnd = L.materials().flatMap(m => (m.laps || []).map(l => l.end)).sort().pop() || key;
+    // ノルマに合わせて直した周回(教材ごと)
+    const records = L.quotaDays();
+    const adj = {};
+    L.materials().filter(m => (m.laps || []).length).forEach(m => { adj[m.id] = L.adjustedLaps(m, records); });
+    const lapsOf = (m) => adj[m.id] ? adj[m.id].map(a => a.lap) : [];
+    const allEnd = L.materials().flatMap(m => lapsOf(m).map(l => l.end)).sort().pop() || key;
     let end;
     if (months) { const d = E.toDate(key); d.setMonth(d.getMonth() + months); end = E.keyOf(d); }
     else { const d = E.toDate(key); d.setMonth(d.getMonth() + 1); end = allEnd > E.keyOf(d) ? allEnd : E.keyOf(d); }
@@ -262,7 +267,7 @@
     const pos = (k) => Math.max(0, Math.min(100, E.daysBetween(start, k) / span * 100));
     const order = L.subjects().map(x => x.name);
     const idx = (name) => { const i = order.indexOf(name); return i < 0 ? 99 : i; };
-    const statuses = L.materials().filter(m => (m.laps || []).length).map(m => ({ m, st: E.lapStatus(m.laps, key) })).filter(x => x.st);
+    const statuses = L.materials().filter(m => (m.laps || []).length).map(m => ({ m, st: E.lapStatus(lapsOf(m), key) })).filter(x => x.st);
     const late = statuses.filter(x => x.st.state === 'late').sort((a, b) => b.st.days - a.st.days);
     const running = statuses.filter(x => x.st.state === 'running');
     const soon = running.filter(x => x.st.days <= 30).length;
@@ -281,7 +286,7 @@
     const examLines = flags.filter(e => e.kind === '定期テスト').map(e => `<span class="rm-line" style="left:${pos(e.date)}%"></span>`).join('');
     const todayLine = `<span class="rm-today" style="left:${pos(key)}%"></span>`;
     // 教科ごとの教材
-    const mats = L.materials().filter(m => (m.laps || []).some(l => l.end >= start && l.start <= end));
+    const mats = L.materials().filter(m => lapsOf(m).some(l => l.end >= start && l.start <= end));
     const groups = [...new Set(mats.map(m => m.subject))].sort((a, b) => idx(a) - idx(b))
       .map(sub => ({ sub, items: mats.filter(m => m.subject === sub).sort((a, b) => ((a.routeOrder ?? 99) - (b.routeOrder ?? 99)) || ((a.order || 0) - (b.order || 0))) }));
     const lapBar = (l, c) => {
@@ -291,20 +296,33 @@
       return `<span class="rm-bar" title="${l.lap}周目 ${mdShort(l.start)}〜${mdShort(l.end)} ${esc(l.scope || '')}" style="left:${a}%;width:${w}%;background:${c};opacity:${l.done ? 0.3 : 0.9}">
         ${elapsed > 0 ? `<i style="width:${elapsed}%;background:rgba(0,0,0,.2)"></i>` : ''}<b>${l.done ? '✓' : ''}${w > 9 ? `${l.lap}周目` : l.lap}</b></span>`;
     };
+    // 元の予定の位置(点線のわく)
+    const ghostBar = (l, c) => { const a = pos(l.start), w = Math.max(1.5, pos(E.addDays(l.end, 1)) - a);
+      return `<span class="rm-ghost" style="left:${a}%;width:${w}%;border-color:${c}"></span>`; };
+    // ノルマに合わせて動かした周(ずれの大きい順)と、そのせいでこえてしまうテスト
+    const moved = L.materials().flatMap(m => (adj[m.id] || []).filter(a => (a.kind === '遅らせた' || a.kind === '延期した') && !a.original.done).map(a => ({ m, a })))
+      .sort((x, y) => y.a.shiftDays - x.a.shiftDays);
+    const crossed = (a, subject) => S.all('events').filter(e => (e.kind === '定期テスト' || e.kind === '模試') && (!(e.subjects || []).length || e.subjects.includes(subject))
+      && e.date > a.original.end && e.date <= a.lap.end).sort((x, y) => x.date.localeCompare(y.date))[0];
+    const movedHTML = moved.length ? `<div class="card rm-moved"><b class="rm-moved-h">ノルマに合わせて動かした周</b>${moved.map(({ m, a }) => { const test = crossed(a, m.subject);
+      return `<div class="rm-moved-row"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><b><i class="dot" style="background:${color(m.subject)}"></i>${esc(m.name)} ${a.lap.lap}周目</b><span class="lapb lapb-shift">${a.kind} +${a.shiftDays}日</span></div>
+        <div class="muted">${esc(E.lapShiftReason(a))}</div>${test ? `<div class="bad" style="font-weight:700;font-size:.85rem">${esc(shortName(test))}(${mdShort(test.date)})をこえます。1日の量を増やすか、範囲をしぼって</div>` : ''}</div>`; }).join('')}</div>` : '';
     const rows = groups.map(g => `<div class="card rm-group"><h3><i style="background:${color(g.sub)}"></i>${esc(g.sub)} <span class="muted">${g.items.length}冊</span></h3>
-      ${g.items.map(m => { const st = E.lapStatus(m.laps, key); const cur = st && st.lap;
-        return `<div class="rm-row"><div class="rm-name"><b>${esc(m.name)}</b>${lapBadge(m)}</div>
-          <div class="rm-track">${examLines}${(m.laps || []).filter(l => l.end >= start && l.start <= end).map(l => lapBar(l, color(m.subject))).join('')}${todayLine}</div>
+      ${g.items.map(m => { const st = E.lapStatus(lapsOf(m), key); const cur = st && st.lap;
+        const ghosts = (adj[m.id] || []).filter(a => a.kind !== '予定どおり' && !a.lap.done && a.original.end >= start && a.original.start <= end).map(a => ghostBar(a.original, color(m.subject))).join('');
+        return `<div class="rm-row"><div class="rm-name"><b>${esc(m.name)}</b>${lapBadge(m, records)}</div>
+          <div class="rm-track">${examLines}${ghosts}${lapsOf(m).filter(l => l.end >= start && l.start <= end).map(l => lapBar(l, color(m.subject))).join('')}${todayLine}</div>
           ${cur && cur.scope ? `<div class="muted rm-scope">${cur.lap}周目:${esc(cur.scope)}(〜${mdShort(cur.end)})</div>` : ''}</div>`; }).join('')}</div>`).join('');
     const tile = (v, label, cls, icon) => `<div class="rm-tile ${cls}"><span>${icon}</span><b>${v}</b><small>${label}</small></div>`;
     return `<div class="row" style="margin-bottom:12px"><button class="secondary" data-act="close-roadmap">‹ 教材</button><h2 style="margin:0;flex:1">ロードマップ</h2></div>
       <div class="rm-tiles">${tile(late.length, '遅れ', late.length ? 'bad' : '', '⚠︎')}${tile(running.length, 'やっている周', 'run', '↻')}${tile(soon, '30日以内に締切', 'soon', '🏁')}</div>
-      ${late.length ? `<div class="card rm-late"><b class="bad">⚠︎ 遅れている周</b>${late.map(x => `<div class="row" style="justify-content:space-between;padding:4px 0"><span><i class="dot" style="background:${color(x.m.subject)}"></i> ${esc(x.m.name)}</span>${lapBadge(x.m)}</div>`).join('')}
+      ${movedHTML}
+      ${late.length ? `<div class="card rm-late"><b class="bad">⚠︎ 遅れている周</b>${late.map(x => `<div class="row" style="justify-content:space-between;padding:4px 0"><span><i class="dot" style="background:${color(x.m.subject)}"></i> ${esc(x.m.name)}</span>${lapBadge(x.m, records)}</div>`).join('')}
         <p class="muted" style="margin:4px 0 0">終わっていたら、教材の画面で「終えた」に</p></div>` : ''}
       <div class="row" style="margin:12px 0">${[[3, '3か月'], [6, '半年'], [12, '1年'], [0, '全部']].map(([n, t]) => `<button class="${months === n ? '' : 'secondary'}" style="min-height:36px;padding:4px 14px" data-act="rm-range" data-n="${n}">${t}</button>`).join('')}</div>
       ${flags.length ? `<div class="rm-dates">${flags.map(e => `<span style="color:${flagColor(e)};background:color-mix(in srgb, ${flagColor(e)} 12%, transparent)">⚑ ${mdShort(e.date)} ${esc(shortName(e))}</span>`).join('')}</div>` : ''}
       ${groups.length ? `<div class="rm-head">${ticks}${flagIcons}<span class="rm-todaylabel" style="left:${pos(key)}%">今日</span></div>${rows}` : '<div class="card"><p class="muted">この期間の周回の予定はありません</p></div>'}
-      <p class="muted rm-legend"><span><i style="background:var(--accent)"></i>周回(暗い所がたった日数)</span><span><i style="background:var(--accent);opacity:.3"></i>終えた周</span>
+      <p class="muted rm-legend"><span><i style="background:var(--accent)"></i>周回(暗い所がたった日数)</span><span><i style="background:var(--accent);opacity:.3"></i>終えた周</span><span><i class="rm-ghost-key"></i>元の予定</span>
         <span style="color:#f08a24">⚑ 考査</span><span style="color:#3478f6">⚑ 模試</span><span style="color:#9b51e0">⚑ 英検</span><span style="color:var(--ng)">| 今日</span></p>`;
   }
 
@@ -325,7 +343,8 @@
       <div class="row"><label class="button secondary" style="margin:0;color:var(--accent)">JSONから読み込む<input type="file" accept=".json,application/json" id="import-json" hidden></label>
       <button data-act="new-material">＋ 教材を追加</button></div></div>
       ${state.importMessage ? `<div class="notice">${esc(state.importMessage)}</div>` : ''}`;
-    const statuses = L.materials().map(m => E.lapStatus(m.laps, today())).filter(Boolean);
+    const records = L.quotaDays();
+    const statuses = L.materials().map(m => E.lapStatus(L.shiftedLaps(m, records), today())).filter(Boolean);
     if (statuses.length) {
       const late = statuses.filter(x => x.state === 'late').length;
       const soon = statuses.filter(x => x.state === 'running' && x.days <= 7).length;
@@ -373,11 +392,12 @@
         <p style="margin:10px 0 0"><b>ノルマ:</b>${esc([everyText(m.every ?? 0, m.weekendOnly) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : ''].filter(Boolean).join('・'))}
           ${m.activeFrom || m.activeUntil ? `<span class="muted">・期間 ${m.activeFrom ? md(m.activeFrom) : ''}〜${m.activeUntil ? md(m.activeUntil) : ''}</span>` : ''}</p></div>
       ${(m.laps || []).length ? `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">周回</h2>${lapBadge(m)}</div>
-        ${m.laps.slice().sort((a, b) => a.lap - b.lap).map(l => `<div class="task" style="align-items:center">
+        ${L.adjustedLaps(m).map(a => { const l = a.lap; return `<div class="task" style="align-items:center">
           <b style="width:24px;color:${l.done ? 'var(--ok)' : 'var(--accent)'}">${l.done ? '✓' : l.lap}</b>
-          <div style="flex:1"><b>${l.lap}周目</b> ${md(l.start)}〜${md(l.end)}<div class="reason">${esc(l.scope || '')}${l.done ? `・${md(l.done)}に終えた` : ''}</div></div>
-          <button class="secondary" style="min-height:34px;padding:4px 12px" data-act="lap-toggle" data-m="${m.id}" data-lap="${l.lap}">${l.done ? '戻す' : '終えた'}</button></div>`).join('')}
-        <p class="muted">周の期間の中だけ、今日のノルマに出ます。早く終わったら「終えた」を押すと、その周はもう出ません</p></div>` : ''}
+          <div style="flex:1"><b>${l.lap}周目</b> ${md(l.start)}〜${md(l.end)}<div class="reason">${esc(l.scope || '')}${l.done ? `・${md(l.done)}に終えた` : ''}</div>
+            ${a.kind !== '予定どおり' ? `<div class="reason" style="color:#f08a24;font-weight:700">${esc(E.lapShiftReason(a))}</div>` : ''}</div>
+          <button class="secondary" style="min-height:34px;padding:4px 12px" data-act="lap-toggle" data-m="${m.id}" data-lap="${l.lap}">${l.done ? '戻す' : '終えた'}</button></div>`; }).join('')}
+        <p class="muted">周の期間の中だけ、今日のノルマに出ます。ノルマが8割に届かなかった日があると、その分だけ周の終わりがうしろにずれます(1回も進めていなければ周ごと延期)</p></div>` : ''}
       <div class="card"><h2>○△×の記録</h2>
         <div class="row"><input id="mark-no" type="number" min="1" placeholder="問題番号" style="width:130px">
           ${['○', '△', '×'].map(mk => `<button class="b-${mk}" data-act="mark-no" data-m="${m.id}" data-mark="${mk}">${mk}</button>`).join('')}</div>
