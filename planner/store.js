@@ -3,7 +3,7 @@
 (function (root) {
   'use strict';
   const KEY = 'planner.v2';
-  const COLLECTIONS = ['subjects', 'timetable', 'settings', 'weeklyEvents', 'events', 'scores', 'tasks', 'materials', 'attempts', 'dayLogs'];
+  const COLLECTIONS = ['subjects', 'timetable', 'settings', 'weeklyEvents', 'events', 'scores', 'tasks', 'materials', 'attempts', 'dayLogs', 'examScopes'];
 
   /** 保存してあるデータを読む(なければ空) */
   function load() {

@@ -288,5 +288,41 @@ test('参考書には模試を優先', () => { eq(E.forBookAdvice(TT, e => e.isM
   });
 }
 
+
+// ---- 定期テストの範囲(ExamPrep と同じ)----
+test('範囲の文をかたまりに:4STEP は問、教科書は p.、番号なしは見直し', () => {
+  const p = E.examParts('4STEP 210〜260、教科書 p.80-132、プリント全部');
+  eq(p.map(x => [x.label, x.from, x.to, x.unit]), [['4STEP', 210, 260, '問'], ['教科書', 80, 132, 'ページ'], ['プリント全部', 0, 0, '']]);
+  eq(E.examParts('Focus Gold 例題１２０～１５０題')[0].unit, '題');
+});
+test('範囲表を教科ごとに分ける', () => {
+  const s = E.examSplit('数学：4STEP 210〜260\n教科書 p.80〜132\nコミュ英 Lesson 5〜7\n化学 リードα 1〜40', ['数学', '英語', '化学']);
+  eq(s.map(x => x.subject), ['数学', '英語', '化学']);
+  eq(s[0].text, '4STEP 210〜260\n教科書 p.80〜132');
+});
+test('範囲のノルマ:切り上げ(残り ÷ 3日前までの日数)、終えた分から、目標を過ぎたら見直し', () => {
+  const sc = [{ id: 'S', subject: '数学', text: '4STEP 210〜260' }];
+  const t = E.examTasks(sc, '中間', '2026-12-10', '2026-11-30', {});
+  eq([t[0].amount, t[0].title], [7, '数学:4STEP 210〜216']);
+  eq(E.examTasks(sc, '中間', '2026-12-10', '2026-11-30', { 'custom-exam-S-0': 20 })[0].title, '数学:4STEP 230〜233');
+  eq(E.examTasks(sc, '中間', '2026-12-10', '2026-12-08', {})[0].id, 'custom-exam-S-review');
+  eq(E.examTasks(sc, '中間', '2026-12-10', '2026-11-25', {}).length, 0);
+});
+
+
+// ---- キャラ育成(Growth と同じ)----
+test('キャラ:レベル・姿・XP・表情', () => {
+  eq([E.levelOf(0), E.levelOf(39), E.levelOf(40), E.levelOf(160), E.levelOf(3240)], [1, 1, 2, 3, 10]);
+  eq([E.stageOf(3), E.stageOf(4), E.stageOf(8), E.stageOf(20)], [1, 2, 3, 4]);
+  const s = E.growthState([{ date: '2026-11-01', quota: 5, done: 4 }, { date: '2026-11-02', quota: 5, done: 2 }], '2026-11-02');
+  eq([s.xp, s.level, s.toNext, s.mood], [90, 2, 70, 'working']);
+  eq(E.growthState([{ date: '2026-11-01', quota: 5, done: 1 }, { date: '2026-11-02', quota: 5, done: 0 }], '2026-11-02').mood, 'sleepy');
+});
+
+test('範囲:Lesson は課、1つだけなら番号1つ', () => {
+  eq(E.examParts('Lesson 5〜7')[0].unit, '課');
+  eq(E.examTasks([{ id: 'E', subject: '英語', text: 'Lesson 5〜7' }], '中間', '2026-12-10', '2026-11-30', {})[0].title, '英語:Lesson 5');
+});
+
 console.log(`\n${passed}件成功、${failed}件失敗`);
 process.exit(failed ? 1 : 0);

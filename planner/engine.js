@@ -552,6 +552,143 @@
     return '予定どおり';
   }
 
+  // ---- 定期テストの範囲から、2週間前のノルマを作る(ExamPrep.swift と同じ)----
+
+  /** 考査の何日前までに範囲を1周終わらせるか(残りの日は見直し) */
+  const EXAM_REVIEW_DAYS = 3;
+
+  /**
+   * 範囲の文を、かたまりに分ける:[{ label, from, to, unit, count }]
+   * 「、」「,」「/」「;」「・」と改行で区切り、それぞれの「数字 〜 数字」を探す。前の文字を名前に(「p.」は外す)
+   * 単位:p・ページ・頁 → ページ、題 → 題、問・番 → 問、どれもなければ 教科書・プリント・ノートはページ、それ以外は問
+   */
+  function examParts(text) {
+    const norm = String(text || '').replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+    return norm.split(/[、,;\/・\n]/).map(x => x.trim()).filter(Boolean).map(chunk => {
+      const m = chunk.match(/(\d+)\s*[〜~\-ー–−]\s*[pP]?\.?\s*(\d+)/);
+      if (!m) return { label: chunk, from: 0, to: 0, unit: '', count: 0 };
+      const a = Number(m[1]), b = Number(m[2]);
+      const before = chunk.slice(0, m.index), after = chunk.slice(m.index + m[0].length);
+      let label = before.replace(/(?<![A-Za-z])[pP]\.?\s*$/, '').replace(/(ページ|頁|問題|No\.?|番号)\s*$/, '').trim();
+      if (!label) label = after.trim();
+      let unit;
+      if (/(?<![A-Za-z])[pP]\.?\s*\d|ページ|頁/.test(chunk)) unit = 'ページ';
+      else if (/lesson|unit|chapter|part|章|課|講|単元/i.test(chunk)) unit = '課';
+      else if (chunk.includes('題')) unit = '題';
+      else if (chunk.includes('問') || chunk.includes('番')) unit = '問';
+      else if (/教科書|プリント|ノート/.test(label)) unit = 'ページ';
+      else unit = '問';
+      const from = Math.min(a, b), to = Math.max(a, b);
+      return { label, from, to, unit, count: to - from + 1 };
+    });
+  }
+
+  /** 範囲表の名前を、登録した教科の名前にそろえる(例:コミュ英 → 英語、現代文 → 国語) */
+  function examSubjectName(name, subjects) {
+    if (subjects.includes(name)) return name;
+    const groups = { '英語': ['英語コミュニケーション', 'コミュ英', '論理表現'], '国語': ['現代文', '古典', '言語文化', '論理国語'], '社会': ['世界史', '日本史', '地理', '公共', '政治経済', '倫理'] };
+    for (const [to, from] of Object.entries(groups)) if (from.includes(name) && subjects.includes(to)) return to;
+    return name;
+  }
+
+  /** 範囲表を教科ごとに分ける:行の始めに教科の名前があれば、その教科の始まり。ない行は前の教科の続き */
+  function examSplit(text, subjects) {
+    const common = ['数学', '英語', '国語', '現代文', '古典', '言語文化', '論理国語', '化学', '物理', '生物', '地学', '理科', '世界史', '日本史', '地理', '公共', '政治経済', '倫理', '社会', '情報', '保健', '家庭', '英語コミュニケーション', '論理表現', 'コミュ英'];
+    const names = [...new Set(subjects.concat(common))].sort((a, b) => b.length - a.length);
+    const out = [];
+    String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach(line => {
+      const name = names.find(n => line.startsWith(n));
+      if (name) out.push({ subject: examSubjectName(name, subjects), text: line.slice(name.length).replace(/^[\s:：　]+/, '') });
+      else if (out.length) out[out.length - 1].text += (out[out.length - 1].text ? '\n' : '') + line;
+    });
+    const merged = [];
+    out.forEach(x => { const f = merged.find(m => m.subject === x.subject); if (f) f.text += '\n' + x.text; else merged.push({ ...x }); });
+    return merged;
+  }
+
+  /** 考査の勉強の期間か:考査の始まりの14日前〜前日 */
+  const isPrepDay = (day, start) => addDays(start, -EXAM_WINDOW) <= day && day < start;
+
+  /**
+   * その日の、範囲のノルマ:[{ id, subject, title, amount, unit, reason }]
+   * 目標の日 = 考査の始まり − 3日。今日の量 = 切り上げ(残り ÷ 今日〜目標の日の日数)、残り = 数 − 終えた数
+   * 目標の日を過ぎたら教科ごとに「見直し」。番号のないかたまりは、考査までの日数が偶数の日に「見直す」
+   */
+  function examTasks(scopes, title, start, day, done) {
+    if (!isPrepDay(day, start)) return [];
+    const daysToExam = daysBetween(day, start);
+    const target = addDays(start, -EXAM_REVIEW_DAYS);
+    const daysLeft = daysBetween(day, target) + 1;
+    const md = (k) => `${Number(k.slice(5, 7))}/${Number(k.slice(8, 10))}`;
+    const out = [];
+    scopes.forEach(sc => {
+      if (daysLeft <= 0) {
+        out.push({ id: `custom-exam-${sc.id}-review`, subject: sc.subject, title: `${sc.subject}:範囲の見直し(×の問題から)`, amount: 0, unit: '', reason: `${title}まであと${daysToExam}日:範囲を1周したので、見直しの日` });
+        return;
+      }
+      examParts(sc.text).forEach((p, i) => {
+        const id = `custom-exam-${sc.id}-${i}`;
+        if (!p.count) {
+          if (daysToExam % 2 === 0) out.push({ id, subject: sc.subject, title: `${sc.subject}:${p.label} を見直す`, amount: 0, unit: '', reason: `${title}まであと${daysToExam}日:番号のない範囲は2日に1回` });
+          return;
+        }
+        const finished = Math.min(p.count, Math.max(0, (done || {})[id] || 0));
+        const remaining = p.count - finished;
+        if (remaining <= 0) return;
+        const amount = Math.ceil(remaining / daysLeft);
+        const a = p.from + finished, b = Math.min(p.to, a + amount - 1);
+        out.push({ id, subject: sc.subject, title: `${sc.subject}:${p.label ? p.label + ' ' : ''}${p.unit === 'ページ' ? 'p.' : ''}${a === b ? a : `${a}〜${b}`}`, amount: b - a + 1, unit: p.unit,
+          reason: `${title}まであと${daysToExam}日:残り${remaining}${p.unit} ÷ ${md(target)}までの${daysLeft}日` });
+      });
+    });
+    return out;
+  }
+
+  /** 考査の勉強の期間に残す、いつもの教材か(単語など毎日のもの・考査用の教材) */
+  const keepsDuringPrep = (item) => item.role === '毎日' || item.role === '考査用' || item.unit === '語' || item.unit === '単語';
+
+  /** 範囲のノルマの、これまでに終えた数(やった日のノルマの量を足す) */
+  function examDoneCounts(entries) {
+    const r = {};
+    entries.forEach(e => { if (e.material.startsWith('custom-exam-') && e.done > 0) r[e.material] = (r[e.material] || 0) + (e.amount || 0); });
+    return r;
+  }
+
+  // ---- ノルマで育つキャラ(Growth.swift と同じ)----
+
+  /** レベル L になるのに必要な XP = 40 × (L − 1)² */
+  const xpForLevel = (lv) => 40 * (lv - 1) * (lv - 1);
+  /** 今のレベル = 切り捨て(√(XP ÷ 40)) + 1 */
+  const levelOf = (xp) => Math.floor(Math.sqrt(Math.max(0, xp) / 40)) + 1;
+  /** 姿(1 見習い・2 ナビゲーター・3 パイロット・4 キャプテン):レベル 1〜 / 4〜 / 8〜 / 13〜 */
+  const stageOf = (lv) => lv >= 13 ? 4 : lv >= 8 ? 3 : lv >= 4 ? 2 : 1;
+  const STAGE_NAMES = { 1: '見習い', 2: 'ナビゲーター', 3: 'パイロット', 4: 'キャプテン' };
+
+  /**
+   * キャラの状態。days:[{ date, quota, done }]
+   * XP = 終えたノルマの数 × 10 + 達成(8割)した日の数 × 30
+   * 表情:今日達成 happy、今日1つ以上 working、きのう達成できず今日0 sleepy、それ以外 normal
+   */
+  function growthState(days, today) {
+    const xp = days.reduce((s, d) => s + d.done * 10 + (isAchieved(d.quota, d.done) ? 30 : 0), 0);
+    const level = levelOf(xp);
+    const t = days.find(d => d.date === today), y = days.find(d => d.date === addDays(today, -1));
+    let mood = 'normal';
+    if (t && isAchieved(t.quota, t.done)) mood = 'happy';
+    else if (t && t.done > 0) mood = 'working';
+    else if (y && y.quota > 0 && !isAchieved(y.quota, y.done)) mood = 'sleepy';
+    const from = xpForLevel(level), to = xpForLevel(level + 1);
+    return { xp, level, stage: stageOf(level), stageName: STAGE_NAMES[stageOf(level)], mood, progress: (xp - from) / Math.max(1, to - from), toNext: to - xp };
+  }
+
+  /** ひとこと(決まった文から、状態で選ぶ) */
+  function growthLine(s, remaining) {
+    if (s.mood === 'happy') return '今日のノルマ、達成!';
+    if (s.mood === 'working') return remaining > 0 ? `あと${remaining}つ。` : 'いい感じ。';
+    if (s.mood === 'sleepy') return 'きのうの分も、今日取り返そう。';
+    return remaining > 0 ? `今日は${remaining}つ。` : '今日のノルマはありません。';
+  }
+
   /** その日に使える教材か(期間・役割・モード・周回) */
   function schedActive(item, day, events) {
     if (item.activeFrom && item.activeFrom > day) return false;
@@ -792,7 +929,7 @@
   const forBookAdvice = (records, isMock) => { const m = records.filter(isMock); return m.length ? { records: m, fromMock: true } : { records, fromMock: false }; };
 
   const Engine = {
-    dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel, lapShortfall, lapShift, lapShiftReason,
+    dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel, lapShortfall, lapShift, lapShiftReason, examParts, examSplit, examSubjectName, isPrepDay, examTasks, keepsDuringPrep, examDoneCounts, EXAM_REVIEW_DAYS, xpForLevel, levelOf, stageOf, growthState, growthLine,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
     trendOverall, trendSeries, forBookAdvice, bookDeviation, ownsBook, adviseBooks, bookRoadmap, weakWordsFromProfile, UNKNOWN_DEVIATION,
     ability, weakness, urgency, priority, allocate, isCore, trackWeight, estimateDeviation, effectiveDeviation, isMock, content, reason, plan, redistribute,

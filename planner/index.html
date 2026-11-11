@@ -2,19 +2,40 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15161a" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyPilot">
   <title>StudyPilot | 高校生の学習計画・勉強記録</title>
   <meta name="description" content="StudyPilot は、時間割・テスト・教材から毎日の勉強のノルマを自動で作る学習計画アプリです。成績の分析、苦手教科の判定、周回のロードマップ。高校生の自習用。">
   <meta name="keywords" content="学習,勉強,教育,中学生,高校生">
   <link rel="icon" href="../icons/studyplanner.png">
   <link rel="apple-touch-icon" href="../icons/studyplanner.png">
-  <link rel="stylesheet" href="../common/style.css?v=20261109a">
-  <script src="../common/gate.js?v=20261109a"></script>
+  <link rel="stylesheet" href="../common/style.css?v=20261111a">
+  <script src="../common/gate.js?v=20261111a"></script>
+  <script src="../common/guard.js?v=20261111a"></script>
   <style>
     :root { --accent: #5b4ee0; --ok: #2f9e57; --tri: #f08a24; --ng: #e2474f; --ticket: #a35ee6; }
-    .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
-    .tabs button { background: transparent; color: var(--muted); min-height: 40px; padding: 6px 14px; white-space: nowrap; }
-    .tabs button.on { background: var(--accent-soft); color: var(--accent); }
+    /* ---- アプリのような上のバー(すりガラス)とタブ ---- */
+    .topbar { position: sticky; top: 0; z-index: 15; height: calc(56px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+      background: color-mix(in srgb, var(--bg) 78%, transparent); color: var(--text); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+    .topbar img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 2px 8px rgba(91,78,224,.3); }
+    .topbar h1 { font-size: 1.3rem; font-weight: 800; letter-spacing: -.01em; }
+    .topbar a { color: var(--accent); font-weight: 700; }
+    .recito-only .topbar a.home { display: none; }
+    .tabs { position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 14; display: flex; gap: 4px; overflow-x: auto; padding: 8px 16px 6px;
+      background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); }
+    .tabs button { background: transparent; color: var(--muted); min-height: 44px; padding: 6px 14px; white-space: nowrap; border-radius: 14px; gap: 6px; }
+    .tabs button.on { background: var(--card); color: var(--accent); box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+    .tabs .ic { width: 20px; height: 20px; }
+    .ic { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; flex: none; }
+    .celebrate-icon { color: #f08a24; } .celebrate-icon .ic { width: 64px; height: 64px; }
+    .help-row span { color: var(--accent); } .help-row span .ic { width: 28px; height: 28px; }
+    .rm-icon .ic { width: 22px; height: 22px; color: #fff; }
+    #view > * { animation: tab-in .22s ease-out; }
+    @keyframes tab-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
     .mode-通常 { background: color-mix(in srgb, #3478f6 15%, transparent); color: #3478f6; }
     .mode-考査 { background: color-mix(in srgb, var(--ng) 15%, transparent); color: var(--ng); }
@@ -144,7 +165,9 @@
     @media (max-width: 640px) {
       .tabs { position: fixed; top: auto; bottom: 10px; left: 10px; right: 10px; z-index: 20; justify-content: space-around; padding: 6px; border: none;
         border-radius: 30px; background: color-mix(in srgb, var(--card) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 6px 24px rgba(0,0,0,.15); }
-      .tabs button { flex: 1; flex-direction: column; gap: 0; min-height: 50px; padding: 4px 2px; font-size: .68rem; border-radius: 24px; }
+      .tabs button { flex: 1; flex-direction: column; gap: 1px; min-height: 50px; padding: 4px 2px; font-size: .66rem; border-radius: 24px; }
+      .tabs button.on { background: var(--accent-soft); box-shadow: none; }
+      .tabs .ic { width: 22px; height: 22px; }
       .tabs button i { margin: 0; font-size: 1.2rem; }
       .tabs .help-btn { margin-left: 0; }
       main { padding-bottom: 96px; }
@@ -210,6 +233,26 @@
     /* ノルマに合わせて動かした周:元の位置は点線のわく */
     .rm-ghost { position: absolute; top: 0; height: 22px; border-radius: 6px; border: 1.5px dashed; opacity: .65; box-sizing: border-box; }
     .rm-ghost-key { display: inline-block; width: 18px; height: 10px; border-radius: 3px; border: 1.5px dashed var(--accent); background: transparent !important; vertical-align: middle; }
+    .growth { display: flex; gap: 14px; align-items: center; }
+    .growth-pic { width: 96px; flex: none; animation: sora-bob 1.6s ease-in-out infinite alternate; }
+    .growth-pic svg { width: 100%; height: auto; display: block; }
+    @keyframes sora-bob { from { transform: translateY(3px); } to { transform: translateY(-3px); } }
+    .sora-sparkle { animation: sora-twinkle 1.2s ease-in-out infinite alternate; transform-origin: center; }
+    @keyframes sora-twinkle { from { opacity: .4; } to { opacity: 1; } }
+    .growth-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .growth-head { display: flex; gap: 8px; align-items: baseline; }
+    .growth-lv { font-weight: 900; font-size: 1.15rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .growth-say { align-self: flex-start; background: var(--bg); border-radius: 12px; padding: 6px 12px; font-size: .9rem; }
+    .growth-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+    .growth-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+    .scope-row { border-top: 1px solid var(--line); padding: 10px 0; }
+    .scope-parts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: .8rem; color: var(--accent); }
+    .rtag.exam { background: color-mix(in srgb, #f08a24 15%, transparent); color: #f08a24; }
+    .qreason { font-size: .75rem; color: var(--muted); }
+    .rm-delay { position: absolute; top: 7px; height: 8px; border-radius: 4px; z-index: 2; }
+    .rm-delay.shift, .rm-delay-key.shift { background: repeating-linear-gradient(-45deg, #f08a24 0 4px, #f6b06a 4px 7px); }
+    .rm-delay.over, .rm-delay-key.over { background: repeating-linear-gradient(-45deg, #e2474f 0 4px, #ef8a8f 4px 7px); }
+    .rm-delay-key { display: inline-block; width: 18px; height: 8px; border-radius: 4px; vertical-align: middle; }
     .rm-moved { background: color-mix(in srgb, #f08a24 8%, var(--card)); }
     .rm-moved-h { color: #f08a24; display: block; margin-bottom: 6px; }
     .rm-moved-row { padding: 8px 0; border-top: 1px solid var(--line); }
@@ -239,26 +282,28 @@
     <picture><source srcset="../icons/studyplanner-dark.png" media="(prefers-color-scheme: dark)"><img src="../icons/studyplanner.png" alt=""></picture>
     <h1>StudyPilot</h1>
     <span class="sync-dot" id="sync-dot"></span>
-    <a href="../">Sotaのapp</a>
+    <a class="home" href="../">Sotaのapp</a>
   </header>
   <nav class="tabs" id="tabs">
-    <button data-act="tab" data-tab="today"><i>☑︎</i>今日</button>
-    <button data-act="tab" data-tab="materials"><i>📚</i>教材</button>
-    <button data-act="tab" data-tab="calendar"><i>🗓</i>カレンダー</button>
-    <button data-act="tab" data-tab="analysis"><i>📈</i>分析</button>
-    <button data-act="tab" data-tab="setup"><i>✏️</i>登録</button>
+    <button data-act="tab" data-tab="today"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>今日</button>
+    <button data-act="tab" data-tab="materials"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>教材</button>
+    <button data-act="tab" data-tab="calendar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>カレンダー</button>
+    <button data-act="tab" data-tab="analysis"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>分析</button>
+    <button data-act="tab" data-tab="setup"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>登録</button>
     <button data-act="help" class="help-btn"><i>?</i>使い方</button>
   </nav>
   <main id="view"></main>
   <footer>データはこのブラウザと、ログインしていれば Firebase(本人だけが読み書きできる場所)に保存されます。</footer>
 
-  <script src="../common/bridge.js?v=20261109a"></script>
-  <script src="../common/charts.js?v=20261109a"></script>
-  <script src="../common/firebase-config.js?v=20261109a"></script>
-  <script src="engine.js?v=20261109a"></script>
-  <script src="store.js?v=20261109a"></script>
-  <script src="../common/sync.js?v=20261109a"></script>
-  <script src="logic.js?v=20261109a"></script>
-  <script src="app.js?v=20261109a"></script>
+  <script src="../common/bridge.js?v=20261111a"></script>
+  <script src="../common/charts.js?v=20261111a"></script>
+  <script src="../common/firebase-config.js?v=20261111a"></script>
+  <script src="engine.js?v=20261111a"></script>
+  <script src="store.js?v=20261111a"></script>
+  <script src="../common/sync.js?v=20261111a"></script>
+  <script src="logic.js?v=20261111a"></script>
+  <script src="../common/icons.js?v=20261111a"></script>
+  <script src="character.js?v=20261111a"></script>
+  <script src="app.js?v=20261111a"></script>
 </body>
 </html>

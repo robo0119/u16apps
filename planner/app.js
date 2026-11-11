@@ -9,7 +9,7 @@
   const ROLES = ['メイン', '毎日', '考査用', '補助', '後回し'];
   const ROLE_NOTE = { 'メイン': '毎日ノルマを出す', '毎日': '毎日ノルマを出し、連続記録もつける', '考査用': '考査モードの日だけノルマを出す',
     '補助': 'ノルマは出さない(必要なときに使う)', '後回し': 'ノルマは出さない(あとで始める)' };
-  const ROLE_ICON = { 'メイン': '★', '毎日': '🔥', '考査用': '📝', '補助': '🛟', '後回し': '🕒' };
+  const ROLE_ICON = { 'メイン': Icon('star'), '毎日': Icon('flame'), '考査用': Icon('edit'), '補助': Icon('life'), '後回し': Icon('clock') };
   const UNITS = ['ページ', '語', '分', '題', '回', '章'];
   const EVERY = [[1, '毎日'], [2, '2日に1回'], [3, '3日に1回'], [4, '4日に1回'], [7, '7日に1回'], [0, '自動(その他・土日)']];
   /** 出す日の表示 */
@@ -83,7 +83,7 @@
         <div class="ring" style="--p:${ratio * 100}"><b>${day.done}</b><small>/ ${day.quota}</small></div>
         <div>${day.quota > 0 ? `<div style="font-size:1.15rem;font-weight:800">${achieved ? '今日のノルマ達成!' : `あと${Math.max(0, needed - day.done)}つで達成`}</div>
           <div style="opacity:.85;font-size:.85rem">${day.quota}つのうち${needed}つ(8割)できたら達成</div>` : '<div>教材を登録すると、今日のノルマが出ます</div>'}
-          <div style="font-weight:800;margin-top:4px">🔥 ${streak.current}日連続${streak.tickets ? `・おやすみ券 ${streak.tickets}枚` : ''}</div></div>
+          <div style="font-weight:800;margin-top:4px">${Icon('flame')} ${streak.current}日連続${streak.tickets ? `・おやすみ券 ${streak.tickets}枚` : ''}</div></div>
       </div>
       <div style="opacity:.9;font-size:.85rem;margin-top:10px">${MODE_NOTE[log.mode]}${next ? `・<b>${esc(next.title.replace('(日付は仮)', ''))}${nextDays === 0 ? 'は今日' : `まで あと${nextDays}日`}</b>` : ''}</div>
     </div>`;
@@ -94,9 +94,18 @@
     const items = L.todayMaterials(log);
     if (L.materials().length) {
       const custom = L.customEntries(log);
+      // ノルマを終えると育つキャラ(お試し)。1日の記録から:その日のノルマの数と、終えた数
+      const gdays = S.all('dayLogs').map(l => { const list = l.entries.filter(e => e.quota > 0); return { date: l.date, quota: list.length, done: list.filter(e => e.done > 0).length }; });
+      const g = E.growthState(gdays, key);
+      const left = items.length + custom.length - items.filter(i => i.e.done > 0).length - custom.filter(e => e.done > 0).length;
+      html += `<div class="card growth"><div class="growth-pic">${SoraCharacter.svg(g.stage, g.mood)}</div>
+        <div class="growth-body"><div class="growth-head"><b>ソラ</b><span class="growth-lv">Lv.${g.level}</span><span class="muted">${g.stageName}</span></div>
+          <div class="growth-say">${esc(E.growthLine(g, left))}</div>
+          <div class="growth-bar"><i style="width:${Math.round(g.progress * 100)}%"></i></div>
+          <div class="muted" style="font-size:.72rem">次のレベルまで ${g.toNext}XP(ノルマ1つ 10XP・達成した日 +30XP)</div></div></div>`;
       html += `<div class="sec-head"><span>今日のノルマ</span><span>${items.filter(i => i.e.done > 0).length + custom.filter(e => e.done > 0).length}/${items.length + custom.length}</span></div>
         ${quotaGroupsHTML(items, custom)}
-        <div class="card list">${custom.length ? subjectHead('自分で追加', 'var(--accent)', custom.filter(e => e.done > 0).length, custom.length) + custom.map(customRow).join('') : ''}
+        <div class="card list">${custom.length ? subjectHead(custom.some(e => e.material.startsWith('custom-exam-')) ? 'テスト範囲・自分で追加' : '自分で追加', 'var(--accent)', custom.filter(e => e.done > 0).length, custom.length) + custom.map(customRow).join('') : ''}
           <button class="add-quota" data-act="add-open">＋ ノルマを足す</button>${state.addOpen ? addPanel(items) : ''}</div>
         <p class="sec-foot">終わったら丸をタップ。8割チェックで達成です。× で今日は外せます</p>`;
     }
@@ -107,17 +116,17 @@
           <b style="color:${r.r.lastMark === '×' ? 'var(--ng)' : 'var(--tri)'};width:20px">${r.r.lastMark}</b>
           <div style="flex:1"><div class="${r.done ? 'muted' : ''}" style="${r.done ? 'text-decoration:line-through' : ''}">${esc(r.m.name)} 問${r.r.no}</div>
             <div class="reason">${esc(r.m.subject)}${r.field ? '・' + esc(r.field) : ''}${r.weak ? ' <span class="weak">苦手分野</span>' : ''}</div></div>
-          ${r.done ? '✅' : ['○', '△', '×'].map(mk => `<button class="b-${mk}" style="min-height:36px;padding:4px 12px" data-act="mark" data-m="${r.m.id}" data-no="${r.r.no}" data-mark="${mk}">${mk}</button>`).join('')}
+          ${r.done ? `<span class="good">${Icon('check')}</span>` : ['○', '△', '×'].map(mk => `<button class="b-${mk}" style="min-height:36px;padding:4px 12px" data-act="mark" data-m="${r.m.id}" data-no="${r.r.no}" data-mark="${mk}">${mk}</button>`).join('')}
         </div>`).join('')}</div>`;
     }
 
-    html += `<details class="card" ${state.showTime ? 'open' : ''} data-time><summary><b>🕒 時間の目安</b> <span class="muted">${total}分</span></summary>
+    html += `<details class="card" ${state.showTime ? 'open' : ''} data-time><summary><b>${Icon('clock')} 時間の目安</b> <span class="muted">${total}分</span></summary>
       <p class="muted">学校・部活の時間から計算した、今日勉強できる時間と、教科ごとの時間の目安</p>
       <div class="row" style="justify-content:flex-end"><button class="secondary" data-act="regen">作り直す</button></div>
       ${tasks.length ? tasks.map(t => `<label class="task ${t.done ? 'done' : ''}" style="margin:0;color:var(--text)">
         <input type="checkbox" data-act="task" data-id="${t.id}" ${t.done ? 'checked' : ''}>
         <div><div>${tag(t.subject)} <b>${t.minutes}分</b> <span class="c">${esc(t.content)}</span>${t.carry ? ' <span class="warn">やり残し</span>' : ''}</div>
-        <div class="reason">💡 ${esc(t.reason)}</div></div></label>`).join('') : '<p class="muted">今日は予定がいっぱいで、勉強の時間はとれません</p>'}`;
+        <div class="reason">${Icon('bulb')} ${esc(t.reason)}</div></div></label>`).join('') : '<p class="muted">今日は予定がいっぱいで、勉強の時間はとれません</p>'}`;
 
     const b = E.availableTime(L.dayContext(key));
     const factor = E.loadFactor(L.recentResults(key));
@@ -172,7 +181,7 @@
     return `<label class="qitem ${e.done > 0 ? 'done' : ''}" style="--c:var(--accent)">
       <input type="checkbox" class="circle" data-act="quota" data-m="${e.material}" ${e.done > 0 ? 'checked' : ''}>
       <div class="qbody"><div class="qtop"><b class="qname">${esc(e.title)}</b>${e.amount > 0 ? `<span class="qamt">${e.amount}${esc(e.unit)}</span>` : ''}</div>
-        <div class="qtags"><span class="rtag">自分で追加</span></div></div>
+        <div class="qtags">${e.material.startsWith('custom-exam-') ? `<span class="rtag exam">テスト範囲</span> <span class="qreason">${esc(e.reason || '')}</span>` : '<span class="rtag">自分で追加</span>'}</div></div>
       <button class="q-remove" data-act="q-remove" data-m="${e.material}" title="今日は外す">×</button></label>`;
   }
 
@@ -211,7 +220,7 @@
     box.className = 'celebrate';
     const colors = ['#ffd23f', '#ff6b9a', '#ff9f1c', '#2ec4b6', '#9b5de5', '#3a86ff'];
     box.innerHTML = Array.from({ length: 40 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${colors[i % 6]};animation-delay:${(i % 9) * 0.06}s"></i>`).join('') +
-      `<div class="celebrate-card"><div style="font-size:3.5rem">🔥</div><b>今日のノルマ達成!</b><div>${days}日連続</div></div>`;
+      `<div class="celebrate-card"><div class="celebrate-icon">${Icon('flame')}</div><b>今日のノルマ達成!</b><div>${days}日連続</div></div>`;
     document.body.appendChild(box);
     setTimeout(() => box.remove(), 2600);
   }
@@ -221,14 +230,14 @@
     const box = document.createElement('div');
     box.className = 'help';
     const topics = [
-      ['✅', '今日のノルマ', '毎日やる教材や、2日・3日に1回の教材が自動で並びます。終わったら丸をタップ。全体の8割にチェックできたら、その日は達成です。'],
-      ['🔥', '連続記録とおやすみ券', '達成した日が続くと連続記録がのびます。7日続けるごとに「おやすみ券」が1枚(最大2枚)。できなかった日に自動で使われ、記録が途切れません。'],
-      ['📊', '周回とロードマップ', '教材ごとに「何周目を、いつまでに」を決めてあります。教材タブのロードマップで全部の予定を横棒で見られます。早く終わったら教材の画面で「終えた」。'],
-      ['🌅', 'モード', '定期テストの2週間前からは「考査」、行事の日は「軽め」、冬休みなどは「休み」で多めに。ノルマが自動で変わります。'],
-      ['↩️', '解き直し', '教材の画面で、間違えた問題を ×(翌日)や △(3日後)で記録すると、その日の「解き直し」に出ます。'],
-      ['🕒', '時間の目安', '学校や部活の時間から計算した、勉強できる時間の目安です。「時間の目安」を開くと見られます。'],
+      ['today', '今日のノルマ', '毎日やる教材や、2日・3日に1回の教材が自動で並びます。終わったら丸をタップ。全体の8割にチェックできたら、その日は達成です。'],
+      ['flame', '連続記録とおやすみ券', '達成した日が続くと連続記録がのびます。7日続けるごとに「おやすみ券」が1枚(最大2枚)。できなかった日に自動で使われ、記録が途切れません。'],
+      ['roadmap', '周回とロードマップ', '教材ごとに「何周目を、いつまでに」を決めてあります。教材タブのロードマップで全部の予定を横棒で見られます。早く終わったら教材の画面で「終えた」。'],
+      ['sun', 'モード', '定期テストの2週間前からは「考査」、行事の日は「軽め」、冬休みなどは「休み」で多めに。ノルマが自動で変わります。'],
+      ['undo', '解き直し', '教材の画面で、間違えた問題を ×(翌日)や △(3日後)で記録すると、その日の「解き直し」に出ます。'],
+      ['clock', '時間の目安', '学校や部活の時間から計算した、勉強できる時間の目安です。「時間の目安」を開くと見られます。'],
     ];
-    box.innerHTML = `<div class="help-card"><h2>StudyPilot の使い方</h2>${topics.map(([i, t, d]) => `<div class="help-row"><span>${i}</span><div><b>${t}</b><p>${d}</p></div></div>`).join('')}
+    box.innerHTML = `<div class="help-card"><h2>StudyPilot の使い方</h2>${topics.map(([i, t, d]) => `<div class="help-row"><span>${Icon(i)}</span><div><b>${t}</b><p>${d}</p></div></div>`).join('')}
       <button style="width:100%">はじめる</button></div>`;
     box.querySelector('button').onclick = () => box.remove();
     document.body.appendChild(box);
@@ -282,7 +291,7 @@
     let ticks = '';
     const t = E.toDate(start); t.setDate(1); t.setMonth(t.getMonth() + 1);
     while (E.keyOf(t) <= end) { ticks += `<span class="rm-tick" style="left:${pos(E.keyOf(t))}%">${t.getMonth() + 1}月</span>`; t.setMonth(t.getMonth() + 1); }
-    const flagIcons = flags.map(e => `<span class="rm-flag" style="left:${pos(e.date)}%;color:${flagColor(e)}">⚑</span>`).join('');
+    const flagIcons = flags.map(e => `<span class="rm-flag" style="left:${pos(e.date)}%;color:${flagColor(e)}">${Icon('flag')}</span>`).join('');
     const examLines = flags.filter(e => e.kind === '定期テスト').map(e => `<span class="rm-line" style="left:${pos(e.date)}%"></span>`).join('');
     const todayLine = `<span class="rm-today" style="left:${pos(key)}%"></span>`;
     // 教科ごとの教材
@@ -295,6 +304,16 @@
       const elapsed = l.done ? 0 : Math.max(0, Math.min(100, (pos(key) - a) / w * 100));
       return `<span class="rm-bar" title="${l.lap}周目 ${mdShort(l.start)}〜${mdShort(l.end)} ${esc(l.scope || '')}" style="left:${a}%;width:${w}%;background:${c};opacity:${l.done ? 0.3 : 0.9}">
         ${elapsed > 0 ? `<i style="width:${elapsed}%;background:rgba(0,0,0,.2)"></i>` : ''}<b>${l.done ? '✓' : ''}${w > 9 ? `${l.lap}周目` : l.lap}</b></span>`;
+    };
+    // 遅れた分の帯(しま模様):ノルマが足りずにのびた所はオレンジ、終わる日を過ぎた所は赤
+    const delaySeg = (from, to, cls) => { if (to < from) return ''; const a = pos(from), w = Math.max(.8, pos(E.addDays(to, 1)) - a);
+      return `<span class="rm-delay ${cls}" style="left:${a}%;width:${w}%"></span>`; };
+    const delays = (a) => {
+      if (a.lap.done) return '';
+      let h = '';
+      if (a.shiftDays > 0) h += delaySeg(E.addDays(a.original.end > a.lap.start ? a.original.end : a.lap.start, 1), a.lap.end, 'shift');
+      if (a.lap.end < key) h += delaySeg(E.addDays(a.lap.end, 1), E.addDays(key, -1), 'over');
+      return h;
     };
     // 元の予定の位置(点線のわく)
     const ghostBar = (l, c) => { const a = pos(l.start), w = Math.max(1.5, pos(E.addDays(l.end, 1)) - a);
@@ -311,19 +330,19 @@
       ${g.items.map(m => { const st = E.lapStatus(lapsOf(m), key); const cur = st && st.lap;
         const ghosts = (adj[m.id] || []).filter(a => a.kind !== '予定どおり' && !a.lap.done && a.original.end >= start && a.original.start <= end).map(a => ghostBar(a.original, color(m.subject))).join('');
         return `<div class="rm-row"><div class="rm-name"><b>${esc(m.name)}</b>${lapBadge(m, records)}</div>
-          <div class="rm-track">${examLines}${ghosts}${lapsOf(m).filter(l => l.end >= start && l.start <= end).map(l => lapBar(l, color(m.subject))).join('')}${todayLine}</div>
+          <div class="rm-track">${examLines}${ghosts}${(adj[m.id] || []).filter(a => a.lap.end >= start && a.lap.start <= end).map(a => lapBar(a.lap, color(m.subject)) + delays(a)).join('')}${todayLine}</div>
           ${cur && cur.scope ? `<div class="muted rm-scope">${cur.lap}周目:${esc(cur.scope)}(〜${mdShort(cur.end)})</div>` : ''}</div>`; }).join('')}</div>`).join('');
     const tile = (v, label, cls, icon) => `<div class="rm-tile ${cls}"><span>${icon}</span><b>${v}</b><small>${label}</small></div>`;
     return `<div class="row" style="margin-bottom:12px"><button class="secondary" data-act="close-roadmap">‹ 教材</button><h2 style="margin:0;flex:1">ロードマップ</h2></div>
-      <div class="rm-tiles">${tile(late.length, '遅れ', late.length ? 'bad' : '', '⚠︎')}${tile(running.length, 'やっている周', 'run', '↻')}${tile(soon, '30日以内に締切', 'soon', '🏁')}</div>
+      <div class="rm-tiles">${tile(late.length, '遅れ', late.length ? 'bad' : '', Icon('alert'))}${tile(running.length, 'やっている周', 'run', Icon('refresh'))}${tile(soon, '30日以内に締切', 'soon', Icon('flag'))}</div>
       ${movedHTML}
-      ${late.length ? `<div class="card rm-late"><b class="bad">⚠︎ 遅れている周</b>${late.map(x => `<div class="row" style="justify-content:space-between;padding:4px 0"><span><i class="dot" style="background:${color(x.m.subject)}"></i> ${esc(x.m.name)}</span>${lapBadge(x.m, records)}</div>`).join('')}
+      ${late.length ? `<div class="card rm-late"><b class="bad">${Icon('alert')} 遅れている周</b>${late.map(x => `<div class="row" style="justify-content:space-between;padding:4px 0"><span><i class="dot" style="background:${color(x.m.subject)}"></i> ${esc(x.m.name)}</span>${lapBadge(x.m, records)}</div>`).join('')}
         <p class="muted" style="margin:4px 0 0">終わっていたら、教材の画面で「終えた」に</p></div>` : ''}
       <div class="row" style="margin:12px 0">${[[3, '3か月'], [6, '半年'], [12, '1年'], [0, '全部']].map(([n, t]) => `<button class="${months === n ? '' : 'secondary'}" style="min-height:36px;padding:4px 14px" data-act="rm-range" data-n="${n}">${t}</button>`).join('')}</div>
-      ${flags.length ? `<div class="rm-dates">${flags.map(e => `<span style="color:${flagColor(e)};background:color-mix(in srgb, ${flagColor(e)} 12%, transparent)">⚑ ${mdShort(e.date)} ${esc(shortName(e))}</span>`).join('')}</div>` : ''}
+      ${flags.length ? `<div class="rm-dates">${flags.map(e => `<span style="color:${flagColor(e)};background:color-mix(in srgb, ${flagColor(e)} 12%, transparent)">${Icon('flag')} ${mdShort(e.date)} ${esc(shortName(e))}</span>`).join('')}</div>` : ''}
       ${groups.length ? `<div class="rm-head">${ticks}${flagIcons}<span class="rm-todaylabel" style="left:${pos(key)}%">今日</span></div>${rows}` : '<div class="card"><p class="muted">この期間の周回の予定はありません</p></div>'}
-      <p class="muted rm-legend"><span><i style="background:var(--accent)"></i>周回(暗い所がたった日数)</span><span><i style="background:var(--accent);opacity:.3"></i>終えた周</span><span><i class="rm-ghost-key"></i>元の予定</span>
-        <span style="color:#f08a24">⚑ 考査</span><span style="color:#3478f6">⚑ 模試</span><span style="color:#9b51e0">⚑ 英検</span><span style="color:var(--ng)">| 今日</span></p>`;
+      <p class="muted rm-legend"><span><i style="background:var(--accent)"></i>周回(暗い所がたった日数)</span><span><i style="background:var(--accent);opacity:.3"></i>終えた周</span><span><i class="rm-ghost-key"></i>元の予定</span><span><i class="rm-delay-key shift"></i>ノルマ不足でのびた分</span><span><i class="rm-delay-key over"></i>締切を過ぎた分</span>
+        <span style="color:#f08a24">${Icon('flag')} 考査</span><span style="color:#3478f6">${Icon('flag')} 模試</span><span style="color:#9b51e0">${Icon('flag')} 英検</span><span style="color:var(--ng)">| 今日</span></p>`;
   }
 
   /** ○△×を選ぶボタン */
@@ -348,7 +367,7 @@
     if (statuses.length) {
       const late = statuses.filter(x => x.state === 'late').length;
       const soon = statuses.filter(x => x.state === 'running' && x.days <= 7).length;
-      html += `<div class="card mrow" data-act="roadmap" style="margin-bottom:16px"><span class="rm-icon">▤</span>
+      html += `<div class="card mrow" data-act="roadmap" style="margin-bottom:16px"><span class="rm-icon">${Icon('roadmap')}</span>
         <div class="grow"><b>周回のロードマップ</b><div class="muted ${late ? 'bad' : ''}">${late ? `遅れ ${late}冊・` : ''}今週終わる周 ${soon}・いつまでに何周かを見る</div></div><span class="muted">›</span></div>`;
     }
     if (!mats.length) return html + '<div class="card"><p class="muted">問題集・単語帳などを追加しよう</p></div>';
@@ -360,7 +379,7 @@
       const list = groups[sub].slice().sort((a, b) => (ROLES.indexOf(a.role) - ROLES.indexOf(b.role)) || ((a.routeOrder ?? 99) - (b.routeOrder ?? 99)) || ((a.order || 0) - (b.order || 0)));
       html += `<div class="card"><h2>${tag(sub)}</h2>${list.map(m => `
         <div class="mrow" data-act="open-material" data-id="${m.id}" style="${m.role === '後回し' || m.role === '補助' ? 'opacity:.7' : ''}">
-          <span style="width:24px;text-align:center">${ROLE_ICON[m.role] || '★'}</span>
+          <span style="width:24px;text-align:center">${ROLE_ICON[m.role] || Icon('star')}</span>
           <div class="grow"><b>${m.routeOrder ? `<span class="muted">${m.routeOrder}</span> ` : ''}${esc(m.name)}</b> ${lapBadge(m)}
             ${m.total > 0 ? `<div class="progress" style="margin:6px 0"><i style="width:${Math.min(100, m.done / m.total * 100)}%"></i></div>` : ''}
             <div class="muted">${[everyText(m.every ?? 0, m.weekendOnly) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : '', m.role, m.kind, m.period].filter(Boolean).map(esc).join('・')}</div>
@@ -387,7 +406,7 @@
       <div class="card"><div class="row">${tag(m.subject)}<span>${esc(m.role)}・${esc(m.kind || '問題集')}${m.period ? '・' + esc(m.period) : ''}</span>${m.total > 0 ? `<b>${m.done}/${m.total}問</b>` : ''}
         ${counts['○'] + counts['△'] + counts['×'] ? `<span style="color:var(--ok)">○できた ${counts['○']}</span><span style="color:var(--tri)">△あやしい ${counts['△']}</span><span style="color:var(--ng)">×まちがい ${counts['×']}</span>` : ''}</div>
         ${m.total > 0 ? `<div class="progress" style="margin-top:8px"><i style="width:${Math.min(100, m.done / total * 100)}%"></i></div>` : ''}
-        ${ms ? `<p style="margin:10px 0 0"><b>🔥 ${ms.current}日連続</b>・最長 ${ms.longest}日</p>` : ''}
+        ${ms ? `<p style="margin:10px 0 0"><b>${Icon('flame')} ${ms.current}日連続</b>・最長 ${ms.longest}日</p>` : ''}
         ${m.note ? `<p class="muted" style="margin:8px 0 0">${esc(m.note)}</p>` : ''}
         <p style="margin:10px 0 0"><b>ノルマ:</b>${esc([everyText(m.every ?? 0, m.weekendOnly) + (m.group ? `(交互${m.group})` : ''), m.amount > 0 ? `${m.amount}${m.unit || ''}` : ''].filter(Boolean).join('・'))}
           ${m.activeFrom || m.activeUntil ? `<span class="muted">・期間 ${m.activeFrom ? md(m.activeFrom) : ''}〜${m.activeUntil ? md(m.activeUntil) : ''}</span>` : ''}</p></div>
@@ -465,13 +484,13 @@
       const st = streak.status[k];
       const ev = events[k];
       cells += `<div class="d ${st === 'achieved' || st === 'ticket' || st === 'missed' ? st : ''} ${k === key ? 'today' : ''}">${d}
-        <small style="color:${ev ? (ev.kind === '行事' ? '#1aa8bf' : ev.kind === '長期休み' ? 'var(--tri)' : 'var(--ng)') : 'transparent'}">${ev ? (ev.kind === '行事' ? '⚑' : ev.kind === '長期休み' ? '☀' : '✎') : '・'}</small></div>`;
+        <small style="color:${ev ? (ev.kind === '行事' ? '#1aa8bf' : ev.kind === '長期休み' ? 'var(--tri)' : 'var(--ng)') : 'transparent'}">${ev ? Icon(ev.kind === '行事' ? 'flag' : ev.kind === '長期休み' ? 'sun' : 'edit') : '・'}</small></div>`;
     }
     const daily = L.materials().filter(m => m.daily);
     return `<div class="card"><div class="stats">
-        <div class="stat"><b>🔥 ${streak.current}日</b><span>連続</span></div>
-        <div class="stat"><b>🏆 ${streak.longest}日</b><span>最長記録</span></div>
-        <div class="stat"><b>🎟️ ${streak.tickets}/${E.MAX_TICKETS}</b><span>おやすみチケット</span></div></div>
+        <div class="stat"><b>${Icon('flame')} ${streak.current}日</b><span>連続</span></div>
+        <div class="stat"><b>${Icon('trophy')} ${streak.longest}日</b><span>最長記録</span></div>
+        <div class="stat"><b>${Icon('ticket')} ${streak.tickets}/${E.MAX_TICKETS}</b><span>おやすみチケット</span></div></div>
         <p class="muted" style="margin-bottom:0">7日連続でチケット1枚(最大2枚)。できなかった日に自動で使い、記録が途切れません</p></div>
       <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:10px">
         <button class="secondary" data-act="month" data-n="-1">‹</button>
@@ -482,7 +501,7 @@
           <span><i style="background:color-mix(in srgb, var(--ticket) 30%, transparent)"></i>チケット</span>
           <span><i style="background:color-mix(in srgb, var(--muted) 15%, transparent)"></i>未達成</span></div></div>
       ${daily.length ? `<div class="card"><h2>毎日やる教材</h2><table>${daily.map(m => { const s = L.materialStreak(m.id, streak, key);
-        return `<tr><td>${esc(m.name)}</td><td class="num">🔥${s.current}日</td><td class="num muted">最長${s.longest}日</td></tr>`; }).join('')}</table></div>` : ''}`;
+        return `<tr><td>${esc(m.name)}</td><td class="num">${Icon('flame')}${s.current}日</td><td class="num muted">最長${s.longest}日</td></tr>`; }).join('')}</table></div>` : ''}`;
   }
 
   // ---------------- 分析 ----------------
@@ -530,7 +549,7 @@
     const ordered = subs.filter(x => E.isCore(track, x.name)).concat(subs.filter(x => !E.isCore(track, x.name)));
     const profileWeak = E.weakWordsFromProfile(s.profile);
     const dots = (level, c) => `<span class="lv">${[1, 2, 3, 4, 5].map(i => `<i style="background:${i <= level ? c : 'var(--line)'}"></i>`).join('')}</span>`;
-    let html = back + `<div class="card"><div class="row" style="justify-content:space-between"><b style="font-size:1.1rem">🏁 目標の偏差値 ${goal}</b>
+    let html = back + `<div class="card"><div class="row" style="justify-content:space-between"><b style="font-size:1.1rem">${Icon('flag')} 目標の偏差値 ${goal}</b>
         <div class="row"><button class="secondary" style="min-height:36px;padding:2px 14px" data-act="goal" data-d="-1">−</button><button class="secondary" style="min-height:36px;padding:2px 14px" data-act="goal" data-d="1">＋</button></div></div>
         <p class="muted" style="margin:6px 0 0">テストの結果(偏差値の目安)・苦手分野・持っている教材から、今やる本と次の本を選び、目標までの予想ロードマップを作ります</p></div>`;
     ordered.forEach(sub => {
@@ -624,7 +643,7 @@
     // 主要教科(理系なら数学・理科・英語)を先に
     const ordered = subjects.filter(x => E.isCore(track, x.name)).concat(subjects.filter(x => !E.isCore(track, x.name)));
     const orderIdx = (name) => { const i = ordered.findIndex(x => x.name === name); return i < 0 ? 99 : i; };
-    let html = `<div class="card mrow" data-act="books-open" style="margin-bottom:16px"><span class="rm-icon" style="background:#5856d6">📚</span>
+    let html = `<div class="card mrow" data-act="books-open" style="margin-bottom:16px"><span class="rm-icon" style="background:#5856d6">${Icon('book')}</span>
       <div class="grow"><b>おすすめの参考書と予想ロードマップ</b><div class="muted">成績から、今やる本・次の本と目標までの道すじ</div></div><span class="muted">›</span></div>`;
     const latest = testGroups()[0];
     if (!scores.length) html += '<div class="card"><p class="muted">成績がまだありません(登録 → テストの結果)</p></div>';
@@ -688,7 +707,7 @@
       for (let d = 2; d <= 7; d++) {
         const slot = slots.find(x => x.weekday === d && x.period === p);
         tt += `<td><select data-act-change="slot" data-w="${d}" data-p="${p}" style="${slot ? `background:${color(slot.subject)};color:#fff` : ''}">
-          <option value=""></option>${subjects.map(x => `<option ${slot && slot.subject === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></td>`;
+          <option value=""></option>${(slot && !subjects.some(x => x.name === slot.subject) ? [{ name: slot.subject }] : []).concat(subjects).map(x => `<option value="${esc(x.name)}" ${slot && slot.subject === x.name ? 'selected' : ''}>${esc(slot && slot.subject === x.name && slot.raw ? slot.raw : x.name)}</option>`).join('')}</select></td>`;
       }
       tt += '</tr>';
     }
@@ -731,7 +750,39 @@
           <div><label>終わり/何時間目まで</label><input id="e-e" placeholder="15:00 か 9"></div></div>
         <label>テストの教科(未選択 = 全教科)</label><div class="checks" id="e-subjects">${subjects.map(x => `<label><input type="checkbox" value="${esc(x.name)}">${esc(x.name)}</label>`).join('')}</div>
         <button data-act="add-event" style="margin-top:10px">追加</button></div>
+      ${examScopeHTML(subjects)}
       ${scoresHTML(subjects)}`;
+  }
+
+  /**
+   * 定期テストの範囲(iOS版の ExamScopeView と同じ):範囲表を貼り付けて教科ごとに分け、直して保存
+   * 考査の14日前から、今日のノルマが範囲から逆算したものに切りかわる(E.examTasks)
+   */
+  function examScopeHTML(subjects) {
+    const key = today();
+    const exams = {};
+    S.all('events').filter(e => e.kind === '定期テスト').forEach(e => {
+      const x = exams[e.title] || (exams[e.title] = { title: e.title, start: e.date, end: e.date });
+      if (e.date < x.start) x.start = e.date; if (e.date > x.end) x.end = e.date;
+    });
+    const list = Object.values(exams).filter(x => x.end >= key).sort((a, b) => a.start.localeCompare(b.start));
+    if (!list.length) return '<div class="card"><h2>定期テストの範囲</h2><p class="muted">これからの定期テストがありません(上で定期テストを登録してください)</p></div>';
+    if (!state.scopeExam || !list.some(x => x.title === state.scopeExam)) state.scopeExam = list[0].title;
+    const exam = list.find(x => x.title === state.scopeExam);
+    const scopes = S.all('examScopes').filter(x => x.exam === exam.title).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const names = subjects.map(x => x.name);
+    return `<div class="card"><h2>定期テストの範囲</h2>
+      <div class="fg"><div><label>考査</label><select data-act-change="scope-exam">${list.map(x => `<option ${x.title === exam.title ? 'selected' : ''}>${esc(x.title)}</option>`).join('')}</select></div></div>
+      <p class="muted" style="margin:6px 0">${mdShort(E.addDays(exam.start, -14))}から、ノルマが範囲から逆算したものに変わります(単語など毎日の教材は残ります)</p>
+      <textarea id="scope-paste" placeholder="範囲表を貼り付け(行の始めに教科の名前)&#10;例:数学 4STEP 210〜260、教科書 p.80〜132&#10;英語 Lesson 5〜7"></textarea>
+      <div class="row" style="margin:8px 0 12px"><button data-act="scope-read">読み込む</button>${state.scopeMessage ? `<span class="muted">${esc(state.scopeMessage)}</span>` : ''}</div>
+      ${scopes.map(sc => `<div class="scope-row">
+        <div class="row" style="flex-wrap:nowrap"><select data-act-change="scope-subject" data-id="${sc.id}" style="width:auto">${[...new Set(names.concat(sc.subject))].map(n => `<option ${n === sc.subject ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+          <span style="flex:1"></span><button class="danger" data-act="scope-del" data-id="${sc.id}">消す</button></div>
+        <textarea data-act-change="scope-text" data-id="${sc.id}" style="min-height:60px">${esc(sc.text)}</textarea>
+        <div class="scope-parts">${E.examParts(sc.text).map(p => `<span class="${p.count ? '' : 'muted'}">${p.count ? `${esc(p.label)} ${p.from}〜${p.to}(${p.count}${p.unit})` : `${esc(p.label)}(番号なし → 見直し)`}</span>`).join('')}</div></div>`).join('')}
+      <button class="secondary" data-act="scope-add">＋ 教科を足す</button>
+      <p class="muted" style="margin-top:8px">毎日の量 = 残り ÷ 考査の3日前までの日数(番号の範囲ごと)。残りの3日は見直し</p></div>`;
   }
 
   /**
@@ -800,7 +851,7 @@
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
     $('view').innerHTML = VIEWS[state.tab]();
     const u = Auth.user;
-    $('sync-dot').textContent = !Sync.configured() ? '' : !u ? '未ログイン' : Sync.isSyncing ? '同期中…' : Sync.lastError ? '⚠︎ 同期エラー' : '同期 ✓';
+    $('sync-dot').textContent = !Sync.configured() ? '' : !u ? '未ログイン' : Sync.isSyncing ? '同期中…' : Sync.lastError ? '同期エラー' : '同期 ✓';
   }
 
   /** 保存して同期し、描き直す */
@@ -930,6 +981,26 @@
       S.put('weeklyEvents', S.newID(), { title, weekday: Number($('w-day').value), start, end });
       L.regeneratePlan(today()); commit();
     },
+    /** 貼り付けた範囲表を教科ごとに分けて保存(同じ教科があれば書きかえ) */
+    'scope-read'() {
+      const split = E.examSplit($('scope-paste').value, L.subjects().map(x => x.name));
+      if (!split.length) { state.scopeMessage = '教科の名前が見つかりませんでした。行の始めに「数学」などを書いてください'; render(); return; }
+      const all = S.all('examScopes');
+      let order = all.reduce((m, x) => Math.max(m, x.order || 0), -1);
+      split.forEach(x => {
+        const found = all.find(sc => sc.exam === state.scopeExam && sc.subject === x.subject);
+        if (found) S.put('examScopes', found.id, { ...found, text: x.text });
+        else S.put('examScopes', S.newID(), { exam: state.scopeExam, subject: x.subject, text: x.text, order: ++order });
+      });
+      state.scopeMessage = `${split.length}教科の範囲を読み込みました`;
+      commit();
+    },
+    'scope-add'() {
+      const order = S.all('examScopes').reduce((m, x) => Math.max(m, x.order || 0), -1) + 1;
+      S.put('examScopes', S.newID(), { exam: state.scopeExam, subject: (L.subjects()[0] || { name: '数学' }).name, text: '', order });
+      commit();
+    },
+    'scope-del'(el) { S.remove('examScopes', el.dataset.id); commit(); },
     'add-event'() {
       const kind = $('e-kind').value, title = $('e-title').value.trim(), from = $('e-date').value, to = $('e-end').value || from;
       if (!title || !from || to < from) { alert('名前と日にちを確かめてください'); return; }
@@ -1028,6 +1099,11 @@
       commit();
     } else if (el.dataset.actChange === 'score-kind') {
       $('sform').dataset.kind = el.value;
+    } else if (el.dataset.actChange === 'scope-exam') {
+      state.scopeExam = el.value; state.scopeMessage = ''; render();
+    } else if (el.dataset.actChange === 'scope-subject' || el.dataset.actChange === 'scope-text') {
+      const sc = S.get('examScopes', el.dataset.id);
+      if (sc) { sc[el.dataset.actChange === 'scope-subject' ? 'subject' : 'text'] = el.value; S.put('examScopes', sc.id, sc); commit(); }
     } else if (el.dataset.actChange === 'periods') {
       state.periods = Number(el.value); render();
     } else if (el.dataset.set) {

@@ -173,7 +173,7 @@
       mats.filter(m => m.groupMode === '単元順' && m.group && known.has(m.id))
         .forEach(m => mats.filter(x => x.group === m.group).forEach(x => known.add(x.id)));
       const added = L.schedule(key).filter(q => !known.has(q.id))
-        .map(q => ({ material: q.id, quota: 1, done: 0, from: q.unitIndex ?? 1, amount: q.amount, unit: q.unit, reason: q.reason }));
+        .map(q => ({ material: q.id, quota: 1, done: 0, from: q.unitIndex ?? 1, amount: q.amount, unit: q.unit, reason: q.reason, title: q.title || '' }));
       if (added.length || isNew || old || modeChanged) {
         log.entries = log.entries.concat(added);
         S.put('dayLogs', key, log);
@@ -218,7 +218,26 @@
         weekendOnly: !!m.weekendOnly }));
       const priority = {};
       L.subjectStates(key).forEach(s => { priority[s.name] = E.priority(s, false); });
-      return E.schedule(items, key, L.modeEvents(), priority);
+      const planned = E.schedule(items, key, L.modeEvents(), priority);
+      // 定期テストの2週間前なら、範囲から逆算したノルマに切りかえる(StudyService.applyExamPrep と同じ)
+      const prep = L.examPrep(key);
+      if (!prep) return planned;
+      const byID = Object.fromEntries(items.map(i => [i.id, i]));
+      return planned.filter(q => !byID[q.id] || E.keepsDuringPrep(byID[q.id]))
+        .concat(prep.map(t => ({ id: t.id, amount: t.amount, unit: t.unit, reason: t.reason, title: t.title })));
+    },
+
+    /** その日の、範囲から作ったノルマ(範囲を登録した考査の2週間前〜前日でなければ null) */
+    examPrep(key) {
+      const scopes = S.all('examScopes').sort((a, b) => (a.order || 0) - (b.order || 0));
+      if (!scopes.length) return null;
+      const titles = new Set(scopes.map(s => s.exam));
+      const starts = {};
+      S.all('events').filter(e => e.kind === '定期テスト' && titles.has(e.title)).forEach(e => { if (!starts[e.title] || e.date < starts[e.title]) starts[e.title] = e.date; });
+      const cand = Object.entries(starts).filter(([, s]) => E.isPrepDay(key, s)).sort((a, b) => a[1].localeCompare(b[1]))[0];
+      if (!cand) return null;
+      const entries = S.all('dayLogs').filter(l => l.date < key).flatMap(l => l.entries);
+      return E.examTasks(scopes.filter(s => s.exam === cand[0]), cand[0], cand[1], key, E.examDoneCounts(entries));
     },
 
     /** 今日の教材(選ばれた順) */
