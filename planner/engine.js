@@ -574,6 +574,7 @@
       let unit;
       if (/(?<![A-Za-z])[pP]\.?\s*\d|ページ|頁/.test(chunk)) unit = 'ページ';
       else if (/lesson|unit|chapter|part|章|課|講|単元/i.test(chunk)) unit = '課';
+      else if (chunk.includes('回')) unit = '回';
       else if (chunk.includes('題')) unit = '題';
       else if (chunk.includes('問') || chunk.includes('番')) unit = '問';
       else if (/教科書|プリント|ノート/.test(label)) unit = 'ページ';
@@ -626,20 +627,31 @@
         out.push({ id: `custom-exam-${sc.id}-review`, subject: sc.subject, title: `${sc.subject}:範囲の見直し(×の問題から)`, amount: 0, unit: '', reason: `${title}まであと${daysToExam}日:範囲を1周したので、見直しの日` });
         return;
       }
-      examParts(sc.text).forEach((p, i) => {
-        const id = `custom-exam-${sc.id}-${i}`;
-        if (!p.count) {
-          if (daysToExam % 2 === 0) out.push({ id, subject: sc.subject, title: `${sc.subject}:${p.label} を見直す`, amount: 0, unit: '', reason: `${title}まであと${daysToExam}日:番号のない範囲は2日に1回` });
-          return;
-        }
-        const finished = Math.min(p.count, Math.max(0, (done || {})[id] || 0));
-        const remaining = p.count - finished;
-        if (remaining <= 0) return;
-        const amount = Math.ceil(remaining / daysLeft);
-        const a = p.from + finished, b = Math.min(p.to, a + amount - 1);
-        out.push({ id, subject: sc.subject, title: `${sc.subject}:${p.label ? p.label + ' ' : ''}${p.unit === 'ページ' ? 'p.' : ''}${a === b ? a : `${a}〜${b}`}`, amount: b - a + 1, unit: p.unit,
-          reason: `${title}まであと${daysToExam}日:残り${remaining}${p.unit} ÷ ${md(target)}までの${daysLeft}日` });
+      const list = examParts(sc.text);
+      // 番号のあるかたまり:前から順に。今日の量 = 切り上げ(かたまり全部の残り ÷ 目標までの日数)。足りなければ次のかたまりへ
+      // 単位(ページ・問・課・回 …)がちがうものは足せないので、単位ごとに別々に進める
+      const numbered = list.map((p, i) => ({ p, i })).filter(x => x.p.count > 0);
+      [...new Set(numbered.map(x => x.p.unit))].forEach(unit => {
+      const left = numbered.filter(x => x.p.unit === unit)
+        .map(x => ({ ...x, remaining: x.p.count - Math.min(x.p.count, Math.max(0, (done || {})[`custom-exam-${sc.id}-${x.i}`] || 0)) }));
+      const total = left.reduce((s, x) => s + x.remaining, 0);
+      let budget = total > 0 ? Math.ceil(total / daysLeft) : 0;
+      left.forEach(({ p, i, remaining }) => {
+        if (remaining <= 0 || budget <= 0) return;
+        const take = Math.min(budget, remaining);
+        budget -= take;
+        const a = p.to - remaining + 1, b = a + take - 1;
+        const label = !p.label ? '' : p.label.endsWith('第') ? p.label : p.label + ' ';
+        out.push({ id: `custom-exam-${sc.id}-${i}`, subject: sc.subject, title: `${sc.subject}:${label}${p.unit === 'ページ' ? 'p.' : ''}${a === b ? a : `${a}〜${b}`}`, amount: take, unit: p.unit,
+          reason: `${title}まであと${daysToExam}日:残り${total}${unit} ÷ ${md(target)}までの${daysLeft}日` });
       });
+      });
+      // 番号のないかたまり:2日に1回、1つずつ順番に
+      const reviews = list.map((p, i) => ({ p, i })).filter(x => !x.p.count);
+      if (reviews.length && daysToExam % 2 === 0) {
+        const { p, i } = reviews[(daysToExam / 2) % reviews.length];
+        out.push({ id: `custom-exam-${sc.id}-${i}`, subject: sc.subject, title: `${sc.subject}:${p.label} を見直す`, amount: 0, unit: '', reason: `${title}まであと${daysToExam}日:番号のない範囲は2日に1回、順番に` });
+      }
     });
     return out;
   }
@@ -652,41 +664,6 @@
     const r = {};
     entries.forEach(e => { if (e.material.startsWith('custom-exam-') && e.done > 0) r[e.material] = (r[e.material] || 0) + (e.amount || 0); });
     return r;
-  }
-
-  // ---- ノルマで育つキャラ(Growth.swift と同じ)----
-
-  /** レベル L になるのに必要な XP = 40 × (L − 1)² */
-  const xpForLevel = (lv) => 40 * (lv - 1) * (lv - 1);
-  /** 今のレベル = 切り捨て(√(XP ÷ 40)) + 1 */
-  const levelOf = (xp) => Math.floor(Math.sqrt(Math.max(0, xp) / 40)) + 1;
-  /** 姿(1 見習い・2 ナビゲーター・3 パイロット・4 キャプテン):レベル 1〜 / 4〜 / 8〜 / 13〜 */
-  const stageOf = (lv) => lv >= 13 ? 4 : lv >= 8 ? 3 : lv >= 4 ? 2 : 1;
-  const STAGE_NAMES = { 1: '見習い', 2: 'ナビゲーター', 3: 'パイロット', 4: 'キャプテン' };
-
-  /**
-   * キャラの状態。days:[{ date, quota, done }]
-   * XP = 終えたノルマの数 × 10 + 達成(8割)した日の数 × 30
-   * 表情:今日達成 happy、今日1つ以上 working、きのう達成できず今日0 sleepy、それ以外 normal
-   */
-  function growthState(days, today) {
-    const xp = days.reduce((s, d) => s + d.done * 10 + (isAchieved(d.quota, d.done) ? 30 : 0), 0);
-    const level = levelOf(xp);
-    const t = days.find(d => d.date === today), y = days.find(d => d.date === addDays(today, -1));
-    let mood = 'normal';
-    if (t && isAchieved(t.quota, t.done)) mood = 'happy';
-    else if (t && t.done > 0) mood = 'working';
-    else if (y && y.quota > 0 && !isAchieved(y.quota, y.done)) mood = 'sleepy';
-    const from = xpForLevel(level), to = xpForLevel(level + 1);
-    return { xp, level, stage: stageOf(level), stageName: STAGE_NAMES[stageOf(level)], mood, progress: (xp - from) / Math.max(1, to - from), toNext: to - xp };
-  }
-
-  /** ひとこと(決まった文から、状態で選ぶ) */
-  function growthLine(s, remaining) {
-    if (s.mood === 'happy') return '今日のノルマ、達成!';
-    if (s.mood === 'working') return remaining > 0 ? `あと${remaining}つ。` : 'いい感じ。';
-    if (s.mood === 'sleepy') return 'きのうの分も、今日取り返そう。';
-    return remaining > 0 ? `今日は${remaining}つ。` : '今日のノルマはありません。';
   }
 
   /** その日に使える教材か(期間・役割・モード・周回) */
@@ -929,7 +906,7 @@
   const forBookAdvice = (records, isMock) => { const m = records.filter(isMock); return m.length ? { records: m, fromMock: true } : { records, fromMock: false }; };
 
   const Engine = {
-    dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel, lapShortfall, lapShift, lapShiftReason, examParts, examSplit, examSubjectName, isPrepDay, examTasks, keepsDuringPrep, examDoneCounts, EXAM_REVIEW_DAYS, xpForLevel, levelOf, stageOf, growthState, growthLine,
+    dayIndex, weekdayOccurrences, pipelinePick, schedActive, schedScore, schedule, lapInWindow, lapStatus, lapLabel, lapShortfall, lapShift, lapShiftReason, examParts, examSplit, examSubjectName, isPrepDay, examTasks, keepsDuringPrep, examDoneCounts, EXAM_REVIEW_DAYS,
     toDate, keyOf, addDays, daysBetween, weekdayOf, merge, availableTime, periodClock, loadFactor, adjustedMinutes,
     trendOverall, trendSeries, forBookAdvice, bookDeviation, ownsBook, adviseBooks, bookRoadmap, weakWordsFromProfile, UNKNOWN_DEVIATION,
     ability, weakness, urgency, priority, allocate, isCore, trackWeight, estimateDeviation, effectiveDeviation, isMock, content, reason, plan, redistribute,

@@ -310,14 +310,6 @@ test('範囲のノルマ:切り上げ(残り ÷ 3日前までの日数)、終え
 });
 
 
-// ---- キャラ育成(Growth と同じ)----
-test('キャラ:レベル・姿・XP・表情', () => {
-  eq([E.levelOf(0), E.levelOf(39), E.levelOf(40), E.levelOf(160), E.levelOf(3240)], [1, 1, 2, 3, 10]);
-  eq([E.stageOf(3), E.stageOf(4), E.stageOf(8), E.stageOf(20)], [1, 2, 3, 4]);
-  const s = E.growthState([{ date: '2026-11-01', quota: 5, done: 4 }, { date: '2026-11-02', quota: 5, done: 2 }], '2026-11-02');
-  eq([s.xp, s.level, s.toNext, s.mood], [90, 2, 70, 'working']);
-  eq(E.growthState([{ date: '2026-11-01', quota: 5, done: 1 }, { date: '2026-11-02', quota: 5, done: 0 }], '2026-11-02').mood, 'sleepy');
-});
 
 test('範囲:Lesson は課、1つだけなら番号1つ', () => {
   eq(E.examParts('Lesson 5〜7')[0].unit, '課');

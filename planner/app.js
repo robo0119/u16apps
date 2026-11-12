@@ -94,15 +94,6 @@
     const items = L.todayMaterials(log);
     if (L.materials().length) {
       const custom = L.customEntries(log);
-      // ノルマを終えると育つキャラ(お試し)。1日の記録から:その日のノルマの数と、終えた数
-      const gdays = S.all('dayLogs').map(l => { const list = l.entries.filter(e => e.quota > 0); return { date: l.date, quota: list.length, done: list.filter(e => e.done > 0).length }; });
-      const g = E.growthState(gdays, key);
-      const left = items.length + custom.length - items.filter(i => i.e.done > 0).length - custom.filter(e => e.done > 0).length;
-      html += `<div class="card growth"><div class="growth-pic">${SoraCharacter.svg(g.stage, g.mood)}</div>
-        <div class="growth-body"><div class="growth-head"><b>ソラ</b><span class="growth-lv">Lv.${g.level}</span><span class="muted">${g.stageName}</span></div>
-          <div class="growth-say">${esc(E.growthLine(g, left))}</div>
-          <div class="growth-bar"><i style="width:${Math.round(g.progress * 100)}%"></i></div>
-          <div class="muted" style="font-size:.72rem">次のレベルまで ${g.toNext}XP(ノルマ1つ 10XP・達成した日 +30XP)</div></div></div>`;
       html += `<div class="sec-head"><span>今日のノルマ</span><span>${items.filter(i => i.e.done > 0).length + custom.filter(e => e.done > 0).length}/${items.length + custom.length}</span></div>
         ${quotaGroupsHTML(items, custom)}
         <div class="card list">${custom.length ? subjectHead(custom.some(e => e.material.startsWith('custom-exam-')) ? 'テスト範囲・自分で追加' : '自分で追加', 'var(--accent)', custom.filter(e => e.done > 0).length, custom.length) + custom.map(customRow).join('') : ''}

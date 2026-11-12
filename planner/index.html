@@ -233,18 +233,6 @@
     /* ノルマに合わせて動かした周:元の位置は点線のわく */
     .rm-ghost { position: absolute; top: 0; height: 22px; border-radius: 6px; border: 1.5px dashed; opacity: .65; box-sizing: border-box; }
     .rm-ghost-key { display: inline-block; width: 18px; height: 10px; border-radius: 3px; border: 1.5px dashed var(--accent); background: transparent !important; vertical-align: middle; }
-    .growth { display: flex; gap: 14px; align-items: center; }
-    .growth-pic { width: 96px; flex: none; animation: sora-bob 1.6s ease-in-out infinite alternate; }
-    .growth-pic svg { width: 100%; height: auto; display: block; }
-    @keyframes sora-bob { from { transform: translateY(3px); } to { transform: translateY(-3px); } }
-    .sora-sparkle { animation: sora-twinkle 1.2s ease-in-out infinite alternate; transform-origin: center; }
-    @keyframes sora-twinkle { from { opacity: .4; } to { opacity: 1; } }
-    .growth-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-    .growth-head { display: flex; gap: 8px; align-items: baseline; }
-    .growth-lv { font-weight: 900; font-size: 1.15rem; color: var(--accent); font-variant-numeric: tabular-nums; }
-    .growth-say { align-self: flex-start; background: var(--bg); border-radius: 12px; padding: 6px 12px; font-size: .9rem; }
-    .growth-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
-    .growth-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
     .scope-row { border-top: 1px solid var(--line); padding: 10px 0; }
     .scope-parts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: .8rem; color: var(--accent); }
     .rtag.exam { background: color-mix(in srgb, #f08a24 15%, transparent); color: #f08a24; }
@@ -303,7 +291,6 @@
   <script src="../common/sync.js?v=20261111a"></script>
   <script src="logic.js?v=20261111a"></script>
   <script src="../common/icons.js?v=20261111a"></script>
-  <script src="character.js?v=20261111a"></script>
   <script src="app.js?v=20261111a"></script>
 </body>
 </html>

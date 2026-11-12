@@ -436,6 +436,13 @@
           start: 540, end: 900, subjects: item.name.includes('英検') ? ['英語'] : [], periodFrom: null, periodTo: null });
         sum.events++;
       });
+      // 時間割(書いてあれば、今の時間割と置きかえる。raw は書いてあったままの名前)
+      if (Array.isArray(json.timetable)) {
+        S.all('timetable').forEach(t => S.remove('timetable', t.id));
+        json.timetable.forEach(t => S.put('timetable', `json-tt-${t.weekday}-${t.period}`, { weekday: t.weekday, period: t.period, subject: t.subject, raw: t.raw || '' }));
+      }
+      // 定期テストの範囲(同じ id は書きかえる)
+      (json.examScopes || []).forEach((x, i) => S.put('examScopes', `json-${x.id}`, { exam: x.exam, subject: x.subject, text: x.text, order: i }));
       if (json.profile) {
         const p = json.profile, lines = [];
         if (p.grade) lines.push(`学年:${p.grade}`);
